@@ -1,0 +1,16 @@
+{
+  "$schema": "https://unpkg.com/@changesets/config@3.1.1/schema.json",
+  "changelog": "@changesets/cli/changelog",
+  "baseBranch": "main",
+  "commit": false,
+  "fixed": [],
+  "linked": [["hook-fetch", "hook-fetch-docs"]],
+  "access": "public",
+  "ignore": ["hook-fetch-docs"],
+  "updateInternalDependencies": "patch",
+  "prerelease": "beta",
+  "privatePackages": {
+    "version": true,
+    "tag": false
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "compilerOptions": {
+    "composite": true, // 新增该配置
+    "target": "ESNext",
+    "jsx": "preserve",
+    "lib": ["ESNext", "DOM", "DOM.Iterable"],
+    "useDefineForClassFields": true,
+    /* Path */
+    "baseUrl": ".",
+    "module": "ESNext",
+    /* Bundler mode */
+    "moduleResolution": "bundler",
+    "paths": {
+      "@configs/*": ["../../configs/*"]
+    },
+    "resolveJsonModule": true,
+    // "types": ["vitest/globals"],
+    // "allowImportingTsExtensions": true,
+
+    /* Linting */
+    "strict": true,
+    "strictNullChecks": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noEmit": false,
+    "esModuleInterop": true,
+    "isolatedModules": true,
+    "skipLibCheck": true
+  },
+  "references": [
+    { "path": "./tsconfig.node.json" },
+    {
+      "path": "./tsconfig.vitepress.json"
+    }
+  ]
+  // "include": ["auto-imports.d.ts", "src/**/*.ts", "src/**/*.d.ts", "src/**/*.tsx", "src/**/*.vue", "**/*.config.ts"]
+}

@@ -1,0 +1,22 @@
+{
+  "compilerOptions": {
+    "composite": true,
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "allowSyntheticDefaultImports": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "esModuleInterop": true,
+    "baseUrl": ".",
+    "paths": {
+      "@configs/*": ["../../configs/*"]
+    }
+  },
+  "include": [
+    "vite.config.mts",
+    "scripts/**/*.ts",
+    ".vitepress/config/**/*.ts",
+    "../../configs/**/*.ts"
+  ]
+}

@@ -1,0 +1,117 @@
+.elx-conversations-item {
+  padding: 14px 10px;
+  margin-right: 20px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+
+  & + & {
+    margin-top: 4px;
+  }
+
+  &.elx-conversations-item--disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    color: #c0c4cc;
+  }
+
+  &.elx-conversations-item--active {
+    background-color: #f0f0f0;
+  }
+
+  &.elx-conversations-item--hovered,
+  &:hover {
+    background-color: #f0f0f0;
+  }
+
+  &.elx-conversations-item--menu-opened {
+    background-color: #f0f0f0;
+  }
+}
+
+.elx-conversations-item__content {
+  display: flex;
+  align-items: center;
+  height: var(--elx-conversations-label-height, 20px);
+
+  .elx-conversations-item__prefix-icon {
+    margin-right: 8px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+
+  .elx-conversations-item__content-main {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .elx-conversations-item__label-container {
+    flex: 1;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    overflow: hidden;
+  }
+
+  .elx-conversations-item__label {
+    font-size: 14px;
+    color: #303133;
+    position: relative;
+    white-space: nowrap;
+
+    &.elx-conversations-item__label--gradient {
+      mask-image: linear-gradient(to right, black 60%, transparent 100%);
+      -webkit-mask-image: linear-gradient(
+        to right,
+        black 60%,
+        transparent 100%
+      );
+    }
+  }
+
+  .elx-conversations-item__timestamp {
+    font-size: 14px;
+    color: #909399;
+    margin-left: 8px;
+  }
+
+  .elx-conversations-item__suffix-icon {
+    margin-left: 8px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+
+  .elx-conversations-item__dropdown-more {
+    justify-self: center;
+    height: 100%;
+    display: flex;
+    align-items: center;
+  }
+
+  .elx-conversations-dropdown-more-icon {
+    font-size: 16px;
+    padding: 2px;
+    border-radius: 5px;
+    &:hover {
+      background-color: #d3d3d3;
+    }
+  }
+
+  .elx-conversations-item__menu {
+    margin-left: 8px;
+    display: flex;
+    align-items: center;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+
+    .elx-conversations-item--hovered &,
+    .elx-conversations-item--active & {
+      opacity: 1;
+    }
+  }
+}
