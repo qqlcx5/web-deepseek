@@ -1,5 +1,5 @@
 <!--
-  Orbit 顶部栏：focus 按钮 + 标题块 + 模型按钮 + 工具按钮
+  Orbit 顶部栏：focus 按钮 + 标题块 + 模型按钮 + 设置按钮 + 工具按钮
 -->
 <script setup lang="ts">
 import type { OrbitState } from './useOrbitState';
@@ -31,7 +31,7 @@ defineProps<{ state: OrbitState }>();
     <!-- 标题块 -->
     <div class="orbit-title-block">
       <div class="orbit-chat-heading">
-        {{ state.currentChat.value?.title }}
+        {{ state.currentChat.value?.title || 'Orbita AI' }}
       </div>
       <div class="orbit-save-state">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
@@ -42,6 +42,28 @@ defineProps<{ state: OrbitState }>();
       </div>
     </div>
 
+    <!-- 导入按钮 -->
+    <button class="icon-btn tooltip" data-tip="导入数据" @click="state.handleImport()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />
+      </svg>
+    </button>
+
+    <!-- 搜索按钮 -->
+    <button class="icon-btn tooltip" data-tip="搜索 (⌘K)" @click="state.openSearch()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+        <circle cx="11" cy="11" r="7" />
+        <path d="m21 21-4.3-4.3" />
+      </svg>
+    </button>
+
+    <!-- 导出按钮 -->
+    <button class="icon-btn tooltip" data-tip="导出数据" @click="state.handleExport()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12" />
+      </svg>
+    </button>
+
     <!-- 模型按钮 -->
     <button class="orbit-model-button" @click="state.modal.value = 'model'">
       <span class="orbit-model-dot" />
@@ -51,6 +73,14 @@ defineProps<{ state: OrbitState }>();
       <span>{{ state.selectedModel.value.name }}</span>
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
         <path d="m6 9 6 6 6-6" />
+      </svg>
+    </button>
+
+    <!-- 设置按钮 -->
+    <button class="icon-btn tooltip" data-tip="设置" @click="state.modal.value = 'settings'">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+        <circle cx="12" cy="12" r="3" />
+        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
       </svg>
     </button>
 
@@ -81,11 +111,8 @@ defineProps<{ state: OrbitState }>();
   flex-shrink: 0;
   backdrop-filter: blur(8px);
 }
-.orbit-only-mobile {
-  display: none;
-}
+.orbit-only-mobile { display: none; }
 
-// —— 标题块 ——
 .orbit-title-block {
   flex: 1;
   min-width: 0;
@@ -105,14 +132,9 @@ defineProps<{ state: OrbitState }>();
   margin-top: 2px;
   font-size: 10px;
   color: var(--success);
-
-  svg {
-    width: 11px;
-    height: 11px;
-  }
+  svg { width: 11px; height: 11px; }
 }
 
-// —— 模型按钮 ——
 .orbit-model-button {
   display: inline-flex;
   align-items: center;
@@ -127,23 +149,9 @@ defineProps<{ state: OrbitState }>();
   border: 1px solid var(--line);
   border-radius: var(--orbit-radius-base);
   transition: all 0.15s;
-
-  svg {
-    width: 14px;
-    height: 14px;
-    color: var(--brand);
-  }
-
-  span {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  &:hover {
-    background: var(--surface-3);
-    border-color: var(--line-strong);
-  }
+  svg { width: 14px; height: 14px; color: var(--brand); }
+  span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  &:hover { background: var(--surface-3); border-color: var(--line-strong); }
 }
 .orbit-model-dot {
   width: 7px;
@@ -152,13 +160,9 @@ defineProps<{ state: OrbitState }>();
   border-radius: 50%;
 }
 
-// —— 响应式 ——
 @media (max-width: 760px) {
-  .orbit-only-mobile {
-    display: inline-flex;
-  }
+  .orbit-only-mobile { display: inline-flex; }
 }
-
 @media (max-width: 390px) {
   .orbit-model-button {
     width: 34px;
@@ -167,8 +171,6 @@ defineProps<{ state: OrbitState }>();
     justify-content: center;
   }
   .orbit-model-button span,
-  .orbit-model-button svg:last-of-type {
-    display: none;
-  }
+  .orbit-model-button svg:last-of-type { display: none; }
 }
 </style>

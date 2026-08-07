@@ -1,5 +1,5 @@
 <!--
-  Orbit Inspector：系统提示词 + 用量 + 上下文文件 + 分支 + 消耗
+  Orbita AI Inspector：系统提示词 + 用量 + 上下文文件 + 分支 + 消耗
 -->
 <script setup lang="ts">
 import type { OrbitState } from './useOrbitState';

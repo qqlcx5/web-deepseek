@@ -1,26 +1,37 @@
 <!--
-  Orbit AI 聊天主页面
-  移植自 chat.html 的视觉与交互逻辑
-  组件用 Element-Plus-X，请求用 hook-fetch（流式对话已就绪）
+  Orbita AI 聊天主页面
+  接入 useAppStore 真实数据层 + Element-Plus-X 组件
 -->
 <script setup lang="ts">
 import { useOrbitState } from './useOrbitState';
+import { Welcome } from 'vue-element-plus-x';
+import OrbitAttachmentPreview from './OrbitAttachmentPreview.vue';
 import OrbitComposer from './OrbitComposer.vue';
 import OrbitDialogs from './OrbitDialogs.vue';
 import OrbitInspector from './OrbitInspector.vue';
 import OrbitMessage from './OrbitMessage.vue';
+import OrbitSearch from './OrbitSearch.vue';
 import OrbitSidebar from './OrbitSidebar.vue';
 import OrbitTopbar from './OrbitTopbar.vue';
 
 const state = useOrbitState();
 const messagesScroller = ref<HTMLElement | null>(null);
 
+/** 最后一条 assistant 消息的 id（用于「重新生成」按钮显示） */
+const lastAssistantId = computed(() => {
+  const msgs = state.messages.value;
+  for (let i = msgs.length - 1; i >= 0; i--) {
+    if (msgs[i].role === 'assistant') return msgs[i].id;
+  }
+  return '';
+});
+
 // 全局快捷键
 function handleGlobalKeydown(e: KeyboardEvent) {
   const meta = e.metaKey || e.ctrlKey;
   if (meta && e.key.toLowerCase() === 'k') {
     e.preventDefault();
-    state.openCommand();
+    state.openSearch();
     return;
   }
   if (meta && e.key.toLowerCase() === 'n') {
@@ -34,6 +45,10 @@ function handleGlobalKeydown(e: KeyboardEvent) {
     return;
   }
   if (e.key === 'Escape') {
+    if (state.searchOpen.value) {
+      state.closeSearch();
+      return;
+    }
     state.modal.value = '';
     state.closeDrawers();
   }
@@ -41,7 +56,6 @@ function handleGlobalKeydown(e: KeyboardEvent) {
 
 onMounted(() => {
   window.addEventListener('keydown', handleGlobalKeydown);
-  // 初始化滚到底部
   state.scrollToBottom();
 });
 onBeforeUnmount(() => {
@@ -64,10 +78,27 @@ function handleScroll() {
   const el = messagesScroller.value;
   state.nearBottom.value = el.scrollHeight - el.scrollTop - el.clientHeight < 100;
 }
+
+// 从搜索结果跳转到目标消息
+watch(
+  () => state.scrollTargetId.value,
+  (targetId) => {
+    if (!targetId) return;
+    nextTick(() => {
+      const el = document.querySelector(`[data-msg-id="${targetId}"]`);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.classList.add('orbit-msg-flash');
+        setTimeout(() => el.classList.remove('orbit-msg-flash'), 2000);
+      }
+      state.scrollTargetId.value = '';
+    });
+  },
+);
 </script>
 
 <template>
-  <div class="orbit-app" :class="{ 'orbit-focus': state.focusMode.value }">
+  <div class="orbit-app" :class="{ 'orbit-focus': state.focusMode.value, 'orbit-compact': state.compactMode.value }">
     <!-- 移动端 backdrop -->
     <div
       v-if="state.sidebarOpen.value"
@@ -95,7 +126,24 @@ function handleScroll() {
         class="orbit-chat-area orbit-scroll"
         @scroll="handleScroll"
       >
-        <div class="orbit-message-list">
+        <!-- 空状态：Welcome -->
+        <div v-if="state.messages.value.length === 0" class="orbit-welcome-area">
+          <Welcome
+            variant="page"
+            :title="'Orbita AI'"
+            :description="'智能助手，随时为你提供帮助'"
+            :suggestions="[
+              { label: '写一份项目计划', value: '写一份项目计划' },
+              { label: '解释量子计算', value: '解释量子计算' },
+              { label: '帮我起草一封邮件', value: '帮我起草一封邮件' },
+              { label: '分析这组数据', value: '分析这组数据' },
+            ]"
+            @select="(item: any) => { state.draft.value = item.value || item.label; state.sendMessage(); }"
+          />
+        </div>
+
+        <!-- 消息列表 -->
+        <div v-else class="orbit-message-list">
           <!-- 日期分隔线 -->
           <div class="orbit-date-divider">
             <span>今天</span>
@@ -106,6 +154,7 @@ function handleScroll() {
             :key="msg.id"
             :message="msg"
             :state="state"
+            :is-last-assistant="msg.id === lastAssistantId"
           />
         </div>
 
@@ -129,6 +178,10 @@ function handleScroll() {
     <OrbitInspector :state="state" />
 
     <OrbitDialogs :state="state" />
+
+    <OrbitSearch :state="state" />
+
+    <OrbitAttachmentPreview :state="state" />
   </div>
 </template>
 
@@ -193,6 +246,16 @@ function handleScroll() {
   overflow-y: auto;
   overscroll-behavior: contain;
 }
+
+// 欢迎区
+.orbit-welcome-area {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 40px 24px;
+}
+
 .orbit-message-list {
   width: min(100%, 820px);
   margin: 0 auto;
@@ -249,6 +312,29 @@ function handleScroll() {
 .orbit-jump-enter-active,
 .orbit-jump-leave-active {
   transition: all 0.2s;
+}
+
+// 消息高亮闪烁（搜索结果跳转）
+:deep(.orbit-msg-flash) {
+  animation: orbit-flash 2s ease-out;
+}
+@keyframes orbit-flash {
+  0% { background-color: rgba(138, 133, 227, 0.18); }
+  100% { background-color: transparent; }
+}
+
+// 紧凑模式
+.orbit-app.orbit-compact {
+  .orbit-message-list {
+    padding-top: 16px;
+    padding-bottom: 80px;
+  }
+  :deep(.orbit-chat-heading) {
+    font-size: 13px;
+  }
+  :deep(.orbit-save-state) {
+    font-size: 9px;
+  }
 }
 
 // —— 响应式 ——
