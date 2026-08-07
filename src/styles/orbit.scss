@@ -1,0 +1,300 @@
+/*
+ * Orbit AI 视觉设计系统
+ * 移植自 chat.html - 单文件聊天应用
+ * 颜色 / 布局变量 / 通用类 / 响应式断点
+ *
+ * 用法：在 main.ts 中通过 src/styles/index.scss 的 @use './orbit' 引入，
+ * 或在组件 :deep(.xxx) 选择器中直接引用这里的变量。
+ */
+
+:root {
+  // —— 颜色 ——
+  --brand: #5b56d6;
+  --brand-hover: #4a45bd;
+  --brand-soft: #efefff;
+  --brand-soft-2: #fafaff;
+  --brand-strong: #35308f;
+
+  --text: #172033;
+  --muted: #667085;
+  --faint: #98a2b3;
+
+  --line: #e5e7eb;
+  --line-strong: #d0d5dd;
+
+  --surface: #ffffff;
+  --surface-2: #f8fafc;
+  --surface-3: #f2f4f7;
+
+  --success: #16875d;
+  --danger: #d92d20;
+  --warning: #b54708;
+
+  // —— 布局 ——
+  --sidebar: 276px;
+  --inspector: 304px;
+  --header: 60px;
+  --mobile-nav: 58px;
+  --topbar-bg: rgba(255, 255, 255, 0.96);
+  --sidebar-bg: #fbfcfd;
+
+  // —— Orbit 字体 ——
+  --orbit-font:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI',
+    'PingFang SC', 'Microsoft YaHei', sans-serif;
+
+  // —— Orbit 排版 ——
+  --orbit-radius-base: 6px;
+  --orbit-radius-md: 8px;
+  --orbit-radius-lg: 14px;
+  --orbit-radius-pill: 9999px;
+  --orbit-shadow-composer: 0 6px 20px rgba(16, 24, 40, 0.06);
+
+  // —— orbit 业务 token（与 orbit 自身不冲突） ——
+  --orbit-avatar-bg: #dedcff;
+  --orbit-avatar-color: #403ba1;
+  --orbit-assistant-bg: #dddcff;
+  --orbit-user-bubble-bg: #eeeeff;
+  --orbit-user-bubble-border: #dedcff;
+  --orbit-user-bubble-color: #20205c;
+  --orbit-code-bg: #18212f;
+  --orbit-code-color: #dbe5f1;
+  --orbit-blockquote-border: #b9b6f7;
+  --orbit-meter-bg: #eaecf0;
+  --orbit-meter-fill: #5b9e82;
+  --orbit-tooltip-bg: #1d2939;
+  --orbit-divider: #c8ccd4;
+  --orbit-online: #16a37f;
+  --orbit-online-bg: #e6f4ec;
+  --orbit-offline-bg: #fffbeb;
+  --orbit-offline-border: #fde68a;
+  --orbit-offline-text: #92400e;
+  --orbit-source-hover: #aaa7ec;
+  --orbit-focus-ring: 0 0 0 3px var(--brand-soft);
+}
+
+// —— 基础 ——
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  letter-spacing: 0;
+}
+
+html,
+body {
+  font-family: var(--orbit-font);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  color: var(--text);
+  background: var(--surface-2);
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  padding: 0;
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+[v-cloak] {
+  display: none;
+}
+
+// —— 滚动条 ——
+.orbit-scroll,
+.scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--orbit-divider) transparent;
+
+  &::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  &::-webkit-scrollbar-thumb {
+    background: var(--orbit-divider);
+    border-radius: 6px;
+  }
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+}
+
+// —— 图标按钮 ——
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  color: var(--muted);
+  cursor: pointer;
+  background: transparent;
+  border-radius: var(--orbit-radius-base);
+  transition:
+    background 0.15s,
+    color 0.15s;
+
+  &:hover {
+    color: var(--text);
+    background: var(--surface-3);
+  }
+
+  &.active {
+    color: var(--brand);
+    background: var(--brand-soft);
+  }
+
+  svg {
+    width: 17px;
+    height: 17px;
+  }
+}
+
+// —— Tooltip ——
+.tooltip {
+  position: relative;
+
+  &::after {
+    position: absolute;
+    top: calc(100% + 7px);
+    left: 50%;
+    z-index: 80;
+    padding: 5px 9px;
+    font-size: 11px;
+    color: #fff;
+    content: attr(data-tip);
+    background: var(--orbit-tooltip-bg);
+    border-radius: 5px;
+    opacity: 0;
+    pointer-events: none;
+    transform: translateX(-50%);
+    transition: opacity 0.15s;
+    white-space: nowrap;
+  }
+
+  &:hover::after {
+    opacity: 1;
+  }
+}
+
+// —— 主按钮 / 次按钮 ——
+.primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  padding: 0 14px;
+  font-size: 13px;
+  font-weight: 650;
+  color: #fff;
+  cursor: pointer;
+  background: var(--brand);
+  border-radius: var(--orbit-radius-base);
+  transition: background 0.15s;
+
+  &:hover {
+    background: var(--brand-hover);
+  }
+
+  &:disabled {
+    color: var(--faint);
+    cursor: not-allowed;
+    background: var(--surface-3);
+  }
+}
+
+.secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  padding: 0 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--orbit-radius-base);
+  transition: all 0.15s;
+
+  &:hover {
+    background: var(--surface-3);
+    border-color: var(--line-strong);
+  }
+}
+
+// —— 侧栏 ——
+.orbit-sidebar {
+  display: flex;
+  flex-direction: column;
+  width: var(--sidebar);
+  height: 100%;
+  background: var(--sidebar-bg);
+  border-right: 1px solid var(--line);
+}
+
+// —— 头部 (topbar) ——
+.orbit-topbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: var(--header);
+  padding: 0 16px;
+  background: var(--topbar-bg);
+  border-bottom: 1px solid var(--line);
+}
+
+// —— Inspector ——
+.orbit-inspector {
+  display: flex;
+  flex-direction: column;
+  width: var(--inspector);
+  height: 100%;
+  background: var(--sidebar-bg);
+  border-left: 1px solid var(--line);
+}
+
+// —— 消息气泡 ——
+// 兼容 Element-Plus-X 的 .el-bubble 容器
+.el-bubble {
+  padding: 0 !important;
+}
+
+// —— 隐藏 toast 旧样式冲突（被 orbit-toast 接管） ——
+.orbit-toast-stack {
+  position: fixed;
+  z-index: 100;
+  bottom: 20px;
+  left: 50%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transform: translateX(-50%);
+}
+
+// —— 响应式断点：≤1180px inspector 抽屉化 ——
+@media (max-width: 1180px) {
+  :root {
+    --inspector: 304px;
+  }
+}
+
+@media (max-width: 760px) {
+  :root {
+    --header: 54px;
+  }
+}
