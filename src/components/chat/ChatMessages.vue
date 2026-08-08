@@ -3,6 +3,7 @@ import { ref, watch, nextTick } from 'vue'
 import { useChatStore } from '@/stores/chat'
 import { Icon } from '@iconify/vue'
 import { MarkdownRenderer } from 'x-markdown-vue'
+import { Welcome } from 'vue-element-plus-x'
 import 'x-markdown-vue/style'
 
 const store = useChatStore()
@@ -49,11 +50,12 @@ defineExpose({ scrollToBottom })
     <div ref="messageScroller" class="messages scroll" @scroll="handleScroll">
       <div class="message-list">
         <div v-if="store.messages.length === 0" class="empty-state">
-          <div class="empty-icon">
-            <Icon icon="tabler:message-dots" width="32" />
-          </div>
-          <div class="empty-title">开始新对话</div>
-          <div class="empty-hint">输入消息或粘贴文件，AI 将为你解答</div>
+          <Welcome
+            icon="tabler:sparkles"
+            title="开始新对话"
+            description="输入消息或粘贴文件，AI 将为你解答"
+            variant="filled"
+          />
         </div>
 
         <div v-else class="date-divider">今天</div>

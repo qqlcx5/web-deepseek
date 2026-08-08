@@ -1,5 +1,7 @@
 <script setup lang="ts">
+import { onMounted, onUnmounted } from 'vue'
 import { useChatStore } from '@/stores/chat'
+import { ConfigProvider } from 'vue-element-plus-x'
 import { Icon } from '@iconify/vue'
 import ChatSidebar from '@/components/chat/ChatSidebar.vue'
 import ChatTopbar from '@/components/chat/ChatTopbar.vue'
@@ -34,60 +36,71 @@ function handleKeydown(e: KeyboardEvent) {
   if (e.key === 'Escape') { store.modal = ''; store.closeDrawers() }
 }
 
-handleResize()
-window.addEventListener('resize', handleResize)
-document.addEventListener('keydown', handleKeydown)
+onMounted(() => {
+  handleResize()
+  window.addEventListener('resize', handleResize)
+  document.addEventListener('keydown', handleKeydown)
+  // Initialize app data from IndexedDB
+  store.initApp()
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', handleResize)
+  document.removeEventListener('keydown', handleKeydown)
+})
 </script>
 
 <template>
-  <div
-    class="app"
-    :class="{
-      'inspector-hidden': !store.inspectorVisible,
-      'sidebar-open': store.sidebarOpen,
-      'inspector-panel-open': store.inspectorOpen,
-      'focus-mode': store.focusMode,
-    }"
-  >
+  <ConfigProvider>
     <div
-      class="mobile-backdrop"
-      :class="{ visible: store.sidebarOpen || store.inspectorOpen }"
-      @click="store.closeDrawers()"
-    />
+      class="app"
+      :class="{
+        'inspector-hidden': !store.inspectorVisible,
+        'sidebar-open': store.sidebarOpen,
+        'inspector-panel-open': store.inspectorOpen,
+        'focus-mode': store.focusMode,
+      }"
+    >
+      <div
+        class="mobile-backdrop"
+        :class="{ visible: store.sidebarOpen || store.inspectorOpen }"
+        @click="store.closeDrawers()"
+      />
 
-    <ChatSidebar />
-    <main class="main">
-      <ChatTopbar />
-      <ChatMessages />
-      <ChatComposer />
-    </main>
-    <ChatInspector />
+      <ChatSidebar />
+      <main class="main">
+        <ChatTopbar />
+        <ChatMessages />
+        <ChatComposer />
+      </main>
+      <ChatInspector />
 
-    <nav class="mobile-nav">
-      <button class="active" @click="store.sidebarOpen = true">
-        <Icon icon="tabler:messages" />
-        对话
-      </button>
-      <button @click="store.modal = 'command'">
-        <Icon icon="tabler:search" />
-        搜索
-      </button>
-      <button @click="store.modal = 'command'">
-        <Icon icon="tabler:folder-open" />
-        文件
-      </button>
-      <button @click="store.inspectorOpen = true">
-        <Icon icon="tabler:adjustments-horizontal" />
-        会话
-      </button>
-    </nav>
+      <nav class="mobile-nav">
+        <button class="active" @click="store.sidebarOpen = true">
+          <Icon icon="tabler:messages" />
+          对话
+        </button>
+        <button @click="store.modal = 'command'">
+          <Icon icon="tabler:search" />
+          搜索
+        </button>
+        <button @click="store.modal = 'command'">
+          <Icon icon="tabler:folder-open" />
+          文件
+        </button>
+        <button @click="store.inspectorOpen = true">
+          <Icon icon="tabler:adjustments-horizontal" />
+          会话
+        </button>
+      </nav>
 
-    <div v-if="store.modal" class="overlay" @click="store.modal = ''" />
-    <CommandPalette v-if="store.modal === 'command'" />
-    <ModelSelector v-if="store.modal === 'model'" />
-    <PromptEditor v-if="store.modal === 'prompt'" />
-    <ToastNotification />
-  </div>
+      <div v-if="store.modal" class="overlay" @click="store.modal = ''" />
+      <CommandPalette v-if="store.modal === 'command'" />
+      <ModelSelector v-if="store.modal === 'model'" />
+      <PromptEditor v-if="store.modal === 'prompt'" />
+      <ToastNotification />
+    </div>
+  </ConfigProvider>
 </template>
 
 <style scoped>

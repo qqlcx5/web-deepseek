@@ -1,8 +1,26 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useChatStore } from '@/stores/chat'
 import { Icon } from '@iconify/vue'
+import { estimateTokens, estimateContextPercent } from '@/utils/token-counter'
 
 const store = useChatStore()
+
+const contextPercent = computed(() => {
+  const ctxLen = store.selectedModel?.contextLength || 64000
+  return estimateContextPercent(store.messages, ctxLen)
+})
+
+const tokenCount = computed(() =>
+  store.messages.reduce((sum, m) => sum + estimateTokens(m.content), 0),
+)
+
+const meterColor = computed(() => {
+  const pct = contextPercent.value
+  if (pct < 60) return 'var(--success)'
+  if (pct < 85) return 'var(--warning)'
+  return 'var(--danger)'
+})
 </script>
 
 <template>
@@ -28,10 +46,13 @@ const store = useChatStore()
       <section class="panel-section">
         <div class="panel-heading">上下文用量</div>
         <div class="meter-head">
-          <span>{{ store.messages.length }} 条消息</span>
+          <span>{{ store.messages.length }} 条消息 · ~{{ tokenCount }} tokens</span>
           <span>{{ store.generating ? '生成中...' : '就绪' }}</span>
         </div>
-        <div class="meter-note">上下文窗口大小取决于当前模型。</div>
+        <div class="meter-bar">
+          <div class="meter-fill" :style="{ width: contextPercent + '%', backgroundColor: meterColor }" />
+        </div>
+        <div class="meter-note">{{ contextPercent }}% 已用 · 上下文窗口 {{ (store.selectedModel?.contextLength || 64000) / 1000 }}K tokens</div>
       </section>
 
       <!-- Context files -->
@@ -95,6 +116,8 @@ const store = useChatStore()
 .panel-edit { color: var(--brand); background: transparent; font-size: 10px; border: 0; cursor: pointer; }
 .prompt-preview { display: -webkit-box; overflow: hidden; color: var(--muted); font-size: 10px; line-height: 1.6; -webkit-box-orient: vertical; -webkit-line-clamp: 4; }
 .meter-head { display: flex; justify-content: space-between; color: var(--muted); font-size: 10px; }
+.meter-bar { height: 4px; margin: 7px 0; background: var(--surface-3); border-radius: 2px; overflow: hidden; }
+.meter-fill { height: 100%; border-radius: 2px; transition: width 300ms ease; }
 .meter-note { margin-top: 7px; color: var(--faint); font-size: 9px; line-height: 1.5; }
 .empty-hint { color: var(--faint); font-size: 10px; padding: 8px 0; }
 .context-item { display: flex; align-items: center; gap: 8px; margin-top: 7px; padding: 8px; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; }

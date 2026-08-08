@@ -1,8 +1,18 @@
 <script setup lang="ts">
+import { ref } from 'vue'
 import { useChatStore } from '@/stores/chat'
 import { Icon } from '@iconify/vue'
 
 const store = useChatStore()
+const fileInput = ref<HTMLInputElement | null>(null)
+
+function handleImport(e: Event) {
+  const input = e.target as HTMLInputElement
+  if (input.files?.[0]) {
+    store.importData(input.files[0])
+    input.value = ''
+  }
+}
 </script>
 
 <template>
@@ -40,6 +50,17 @@ const store = useChatStore()
         搜索或执行命令
         <span class="shortcut">⌘ K</span>
       </button>
+      <div class="sidebar-data-actions">
+        <button class="data-btn tooltip" data-tip="导入 Cherry Studio 数据" @click="$refs.fileInput?.click()">
+          <Icon icon="tabler:upload" width="14" />
+          导入
+        </button>
+        <button class="data-btn tooltip" data-tip="导出为 JSON 文件" @click="store.exportData()">
+          <Icon icon="tabler:download" width="14" />
+          导出
+        </button>
+        <input ref="fileInput" type="file" hidden accept=".json" @change="handleImport" />
+      </div>
     </div>
 
     <div class="sidebar-scroll scroll">
@@ -117,6 +138,13 @@ const store = useChatStore()
 .brand-state { display: flex; align-items: center; gap: 5px; margin-top: 2px; color: var(--success); font-size: 10px; }
 .status-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
 .sidebar-actions { padding: 7px 10px 10px; }
+.sidebar-data-actions { display: flex; gap: 6px; margin-top: 8px; }
+.data-btn {
+  display: flex; flex: 1; height: 30px; align-items: center; justify-content: center; gap: 5px;
+  color: var(--muted); background: var(--surface); border: 1px solid var(--line); border-radius: 5px;
+  font-size: 11px; cursor: pointer; transition: border-color 140ms, color 140ms;
+}
+.data-btn:hover { color: var(--text); border-color: var(--brand); }
 .new-chat { width: 100%; }
 .search-trigger {
   display: flex; width: 100%; height: 36px; align-items: center; gap: 8px;

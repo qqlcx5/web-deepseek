@@ -2,10 +2,22 @@
 import { ref, nextTick } from 'vue'
 import { useChatStore } from '@/stores/chat'
 import { Icon } from '@iconify/vue'
+import { Attachments } from 'vue-element-plus-x'
 
 const store = useChatStore()
 const composer = ref<HTMLTextAreaElement | null>(null)
 const fileInput = ref<HTMLInputElement | null>(null)
+
+// Map store attachments to Element-Plus-X Attachments format
+function getAttachmentItems() {
+  return store.attachments.map(f => ({
+    uid: f.id,
+    name: f.name,
+    description: `已加入上下文 · ${f.size}`,
+    status: 'done' as const,
+    fileType: 'file',
+  }))
+}
 
 function resizeComposer() {
   if (!composer.value) return
@@ -53,18 +65,14 @@ defineExpose({ composer, resizeComposer })
       </div>
 
       <!-- Attachments -->
-      <div v-if="store.attachments.length" class="attachments scroll">
-        <div v-for="file in store.attachments" :key="file.id" class="attachment">
-          <span class="file-icon"><Icon icon="tabler:file-text" /></span>
-          <span class="file-copy">
-            <span class="file-name">{{ file.name }}</span>
-            <span class="file-state">已加入上下文 · {{ file.size }}</span>
-          </span>
-          <button class="icon-btn" style="width:23px;height:23px;flex-basis:23px" @click="store.removeAttachment(file)">
-            <Icon icon="tabler:x" width="12" />
-          </button>
-        </div>
-      </div>
+      <Attachments
+        v-if="store.attachments.length"
+        :items="getAttachmentItems()"
+        :hide-upload="true"
+        overflow="scrollX"
+        class="composer-attachments"
+        @delete-card="(item: any, index: number) => store.removeAttachment(store.attachments[index])"
+      />
 
       <!-- Textarea -->
       <textarea

@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
-import { useChatStreaming } from '@/composables/useChatStreaming'
+import { ref, computed, watch } from 'vue'
+import { chatApi } from '@/api/chat-api'
+import { useAppStore } from '@/stores/app'
 import { useTheme } from '@/composables/useTheme'
 import type {
   Chat,
@@ -12,6 +13,8 @@ import type {
   PromptPreset,
   ModalType,
   ThemeMode,
+  ChatCompletionMessage,
+  ChatCompletionChunk,
 } from '@/types/chat'
 
 export const useChatStore = defineStore('chat', () => {
@@ -23,7 +26,7 @@ export const useChatStore = defineStore('chat', () => {
   const inspectorOpen = ref(false)
   const inspectorVisible = ref(true)
   const focusMode = ref(false)
-  const online = ref(true)
+  const online = ref(typeof navigator !== 'undefined' ? navigator.onLine : true)
   const saving = ref(false)
   const modal = ref<ModalType>('')
   const toast = ref('')
@@ -33,12 +36,13 @@ export const useChatStore = defineStore('chat', () => {
   const chats = ref<Chat[]>([])
   const activeChatId = ref<string>('')
   const messages = ref<Message[]>([])
-  const draft = ref('')
+  const draft = ref(localStorage.getItem('orbit-draft') || '')
   const replyingTo = ref('')
   const attachments = ref<Attachment[]>([])
   const nearBottom = ref(true)
   const commandQuery = ref('')
   const promptDraft = ref(
+    localStorage.getItem('orbit-prompt') ||
     '你是一名资深AI助手。先给明确结论，再说明关键约束、风险和可执行步骤。',
   )
 
@@ -124,28 +128,29 @@ export const useChatStore = defineStore('chat', () => {
     { title: '切换主题', description: '在亮色和暗色之间切换', icon: 'sun-moon', action: 'theme' },
   ]
 
-  // ─── Streaming ───
-  const {
-    generating,
-    streamAssistantMessage,
-    stopGeneration,
-  } = useChatStreaming({
-    model: selectedModel,
-    systemPrompt: promptDraft,
-    messages,
-    onMessageUpdated: () => {
-      if (nearBottom.value) {
-        // Trigger scroll via watcher in ChatMessages
-      }
-    },
-    onComplete: () => {
-      saving.value = true
-      setTimeout(() => { saving.value = false }, 700)
-      updateChatPreview()
-    },
-    onError: (err) => {
-      showToast(`请求失败：${err.message}`)
-    },
+  // ─── Streaming State ───
+  const generating = ref(false)
+  let abortController: AbortController | null = null
+
+  // ─── Network monitoring ───
+  if (typeof window !== 'undefined') {
+    window.addEventListener('online', () => {
+      online.value = true
+      showToast('网络已恢复')
+    })
+    window.addEventListener('offline', () => {
+      online.value = false
+      showToast('网络已断开，消息将保存在本地')
+    })
+  }
+
+  // ─── Draft persistence ───
+  watch(draft, (val) => {
+    localStorage.setItem('orbit-draft', val)
+  })
+
+  watch(promptDraft, (val) => {
+    localStorage.setItem('orbit-prompt', val)
   })
 
   // ─── Getters ───
@@ -191,6 +196,29 @@ export const useChatStore = defineStore('chat', () => {
     undoAction.value = null
   }
 
+  // ─── Actions: App data ───
+  async function initApp() {
+    const appStore = useAppStore()
+    await appStore.init()
+  }
+
+  function importData(file: File) {
+    const appStore = useAppStore()
+    appStore.importData(file).then((result) => {
+      if (result.ok) {
+        showToast('数据导入成功')
+      } else {
+        showToast(`导入失败：${result.error}`)
+      }
+    })
+  }
+
+  function exportData() {
+    const appStore = useAppStore()
+    appStore.exportData({ includeApiKeys: false })
+    showToast('数据已导出')
+  }
+
   // ─── Actions: Chat ───
   function newConversation() {
     const id = `chat-${Date.now()}`
@@ -212,7 +240,6 @@ export const useChatStore = defineStore('chat', () => {
   function openConversation(id: string) {
     activeChatId.value = id
     sidebarOpen.value = false
-    // In a real app, load messages from API/localStorage here
     const chat = chats.value.find(c => c.id === id)
     if (chat && chat.messageCount === 0) {
       messages.value = []
@@ -299,11 +326,26 @@ export const useChatStore = defineStore('chat', () => {
     showToast('系统提示词新版本已保存')
   }
 
-  // ─── Actions: Messages ───
-  function sendMessage() {
+  // ─── Internal: build API messages ───
+  function buildApiMessages(): ChatCompletionMessage[] {
+    const result: ChatCompletionMessage[] = []
+    const systemPrompt = promptDraft.value.trim()
+    if (systemPrompt) {
+      result.push({ role: 'system', content: systemPrompt })
+    }
+    for (const msg of messages.value) {
+      if (msg.loading || msg.error) continue
+      if (msg.role === 'user' || msg.role === 'assistant') {
+        result.push({ role: msg.role, content: msg.content })
+      }
+    }
+    return result
+  }
+
+  // ─── Actions: Messages (streaming via chatApi) ───
+  async function sendMessage() {
     if (!canSend.value) return
 
-    // Ensure there's an active chat
     if (!activeChatId.value) {
       newConversation()
     }
@@ -312,10 +354,109 @@ export const useChatStore = defineStore('chat', () => {
       || `请分析附件：${attachments.value.map(f => f.name).join('、')}`
 
     draft.value = ''
+    const currentAttachments = attachments.value.slice()
     attachments.value = []
     replyingTo.value = ''
 
-    streamAssistantMessage(content)
+    // Push user message
+    const userMsg: Message = {
+      id: Date.now(),
+      role: 'user',
+      content,
+      time: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }),
+      attachments: currentAttachments.length > 0 ? currentAttachments : undefined,
+    }
+    messages.value.push(userMsg)
+
+    // Push placeholder assistant message
+    const assistantMsg: Message = {
+      id: Date.now() + 1,
+      role: 'assistant',
+      model: selectedModel.value.name,
+      time: '刚刚',
+      content: '',
+      loading: true,
+      branches: 1,
+      activeBranch: 1,
+    }
+    messages.value.push(assistantMsg)
+
+    generating.value = true
+    abortController = new AbortController()
+
+    try {
+      const apiMessages = buildApiMessages()
+      const stream = await chatApi.chatStream({
+        messages: apiMessages,
+        model: selectedModel.value.id,
+        signal: abortController.signal,
+      })
+
+      const reader = stream.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        buffer += decoder.decode(value, { stream: true })
+
+        // Process complete SSE lines
+        const lines = buffer.split('\n')
+        buffer = lines.pop() ?? ''
+
+        for (const line of lines) {
+          const trimmed = line.trim()
+          if (!trimmed || !trimmed.startsWith('data: ')) continue
+
+          const data = trimmed.slice(6)
+          if (data === '[DONE]') break
+
+          try {
+            const chunk: ChatCompletionChunk = JSON.parse(data)
+            const delta = chunk.choices?.[0]?.delta?.content
+            if (delta) {
+              assistantMsg.loading = false
+              assistantMsg.content += delta
+            }
+          } catch {
+            // Skip malformed JSON lines
+          }
+        }
+      }
+
+      // Finalize
+      assistantMsg.loading = false
+      if (!assistantMsg.content) {
+        assistantMsg.content = '_（空回复）_'
+      }
+
+      updateChatPreview()
+
+      saving.value = true
+      setTimeout(() => { saving.value = false }, 700)
+    } catch (err) {
+      assistantMsg.loading = false
+
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        if (!assistantMsg.content) {
+          assistantMsg.content = '_生成已停止。_'
+        }
+      } else {
+        const errMsg = err instanceof Error ? err.message : String(err)
+        assistantMsg.error = errMsg
+        assistantMsg.content = `⚠️ 请求失败：${errMsg}`
+        showToast(`请求失败：${errMsg}`)
+      }
+    } finally {
+      generating.value = false
+      abortController = null
+    }
+  }
+
+  function stopGeneration() {
+    abortController?.abort()
   }
 
   function copyMessage(message: Message) {
@@ -386,7 +527,8 @@ export const useChatStore = defineStore('chat', () => {
     // Getters
     currentChat, canSend, filteredCommands, filteredCommandChats,
     // Actions
-    showToast, undo, newConversation, openConversation, deleteConversation,
+    showToast, undo, initApp, importData, exportData,
+    newConversation, openConversation, deleteConversation,
     selectModel, toggleFocusMode, toggleInspector, closeInspector, closeDrawers,
     runCommand, savePrompt, sendMessage, stopGeneration,
     copyMessage, rateMessage, regenerate, branchFrom, editMessage,
