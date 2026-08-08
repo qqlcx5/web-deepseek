@@ -16,37 +16,37 @@ AIGC:
 
 ## Pinia Store
 
-- [ ] 创建 `useWorkspaceStore`，定义 WorkspaceState 类型和初始状态
-- [ ] 实现 `fetchWorkspaces()`：加载所有工作区列表 → `request.get('/api/workspaces')`
-- [ ] 实现 `setCurrentWorkspace(id)`：切换当前工作区 + 触发全局事件 `workspace:changed`
-- [ ] 实现 `createWorkspace(data)`：POST 创建工作区 → `request.post` → 插入列表 → 自动切换
-- [ ] 实现 `updateWorkspace(id, data)`：PUT 更新工作区设置 → `request.put`
-- [ ] 实现 `deleteWorkspace(id)`：DELETE 删除工作区（ElMessageBox 二次确认 + 输入名称确认）
-- [ ] 实现 `exportWorkspace(id)`：GET 下载压缩包 → `request.get` blob 下载
-- [ ] 实现 `importWorkspace(file)`：POST 上传压缩包 → `request.post` multipart/form-data
+- [x] 创建 `useWorkspaceStore`，定义 WorkspaceState 类型和初始状态
+- [x] 实现 `fetchWorkspaces()`：加载所有工作区列表 → `request.get('/api/workspaces')`
+- [x] 实现 `setCurrentWorkspace(id)`：切换当前工作区 + 触发全局事件 `workspace:changed`
+- [x] 实现 `createWorkspace(data)`：POST 创建工作区 → `request.post` → 插入列表 → 自动切换
+- [x] 实现 `updateWorkspace(id, data)`：PUT 更新工作区设置 → `request.put`
+- [x] 实现 `deleteWorkspace(id)`：DELETE 删除工作区（ElMessageBox 二次确认 + 输入名称确认）
+- [x] 实现 `exportWorkspace(id)`：GET 下载压缩包 → `request.get` blob 下载
+- [x] 实现 `importWorkspace(file)`：POST 上传压缩包 → `request.post` multipart/form-data
 
 ## 组件
 
 ### WorkspaceSwitcher — [ElDropdown + ElDialog]
-- [ ] 实现 `CurrentWorkspaceDisplay`：显示当前工作区名称 + 图标 + 下拉箭头
-- [ ] 实现 `WorkspaceDropdown`：列出所有工作区，点击切换 → ElDropdown
-- [ ] 实现"管理工作区"入口链接，跳转 `/settings` 工作区管理 section
-- [ ] 实现 `CreateWorkspaceModal`：名称输入 + 描述输入 + 默认模型选择 + 确认创建 → ElDialog
+- [x] 实现 `CurrentWorkspaceDisplay`：显示当前工作区名称 + 图标 + 下拉箭头
+- [x] 实现 `WorkspaceDropdown`：列出所有工作区，点击切换 → ElDropdown
+- [x] 实现"管理工作区"入口链接，跳转 `/settings` 工作区管理 section
+- [x] 实现 `CreateWorkspaceModal`：名称输入 + 描述输入 + 默认模型选择 + 确认创建 → ElDialog
 
 ### WorkspaceSettingsPanel — [ElForm + ElSelect + ElSlider]
-- [ ] 实现通用设置区：名称输入（ElInput）、图标选择器（Emoji Picker）、描述文本域（ElInput textarea）
-- [ ] 实现默认值设置区：默认模型下拉选择（ElSelect）、默认系统提示词编辑器（ElInput textarea）、Temperature 滑块（ElSlider）、TopP 滑块（ElSlider）
-- [ ] 实现危险操作区：导出工作区按钮、删除工作区按钮（ElMessageBox 二次确认 + 输入名称确认）
+- [x] 实现通用设置区：名称输入（ElInput）、图标选择器（Emoji Picker）、描述文本域（ElInput textarea）
+- [x] 实现默认值设置区：默认模型下拉选择（ElSelect）、默认系统提示词编辑器（ElInput textarea）、Temperature 滑块（ElSlider）、TopP 滑块（ElSlider）
+- [x] 实现危险操作区：导出工作区按钮、删除工作区按钮（ElMessageBox 二次确认 + 输入名称确认）
 
 ## API 层 — [hook-fetch: request]
 
-- [ ] 封装 `GET /api/workspaces` → `request.get`
-- [ ] 封装 `POST /api/workspaces` → `request.post`
-- [ ] 封装 `GET /api/workspaces/:id` → `request.get`
-- [ ] 封装 `PUT /api/workspaces/:id` → `request.put`
-- [ ] 封装 `DELETE /api/workspaces/:id` → `request.delete`
-- [ ] 封装 `GET /api/workspaces/:id/export` → `request.get` + blob 下载
-- [ ] 封装 `POST /api/workspaces/import` → `request.post` multipart/form-data
+- [x] 封装 `GET /api/workspaces` → `request.get`
+- [x] 封装 `POST /api/workspaces` → `request.post`
+- [x] 封装 `GET /api/workspaces/:id` → `request.get`
+- [x] 封装 `PUT /api/workspaces/:id` → `request.put`
+- [x] 封装 `DELETE /api/workspaces/:id` → `request.delete`
+- [x] 封装 `GET /api/workspaces/:id/export` → `request.get` + blob 下载
+- [x] 封装 `POST /api/workspaces/import` → `request.post` multipart/form-data
 
 ## 依赖接口
 

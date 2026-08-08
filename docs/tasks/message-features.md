@@ -28,79 +28,79 @@ AIGC:
 
 ## SSE 流式处理 — [Element-Plus-X: useXStream]
 
-- [ ] 实现 SSE 流式连接：基于 useXStream hooks 封装 fetch + ReadableStream + AbortController
-- [ ] 实现 chunk 解析：useXStream 内置 `data:` 行分割 + JSON.parse
-- [ ] 实现 `handleStreamChunk`：根据 chunk.type（text/tool_call/error/done）分发处理
-- [ ] 实现 `appendStreamContent`：增量拼接 AI 消息内容，触发 Vue 响应式重渲染
-- [ ] 实现 `finalizeStream`：流结束后的收尾处理（设置消息 status=done、更新 token 用量）
-- [ ] 实现错误处理：网络错误 → 状态标记 error + 显示重试按钮
-- [ ] 实现断线重连：指数退避（1s/2s/4s/8s），携带 Last-Event-ID 断点续传
+- [x] 实现 SSE 流式连接：基于 useXStream hooks 封装 fetch + ReadableStream + AbortController
+- [x] 实现 chunk 解析：useXStream 内置 `data:` 行分割 + JSON.parse
+- [x] 实现 `handleStreamChunk`：根据 chunk.type（text/tool_call/error/done）分发处理
+- [x] 实现 `appendStreamContent`：增量拼接 AI 消息内容，触发 Vue 响应式重渲染
+- [x] 实现 `finalizeStream`：流结束后的收尾处理（设置消息 status=done、更新 token 用量）
+- [x] 实现错误处理：网络错误 → 状态标记 error + 显示重试按钮
+- [x] 实现断线重连：指数退避（1s/2s/4s/8s），携带 Last-Event-ID 断点续传
 
 ## 组件
 
 ### ChatView
-- [ ] 实现 `ChatView` 主容器：BubbleList + XSender，自适应高度
+- [x] 实现 `ChatView` 主容器：BubbleList + XSender，自适应高度
 
 ### MessageList — [Element-Plus-X: BubbleList]
-- [ ] 实现消息列表：用 BubbleList 组件渲染，内置虚拟滚动支持超长对话（1000+ 条）
-- [ ] 实现消息分组渲染：SystemMessage / UserMessage / AssistantMessage → BubbleList 内置
-- [ ] 实现新消息自动滚动到底部，用户手动上滚时不强制滚动 → BubbleList 内置
-- [ ] 实现 ScrollToBottomButton：用户上滚后显示浮按钮
+- [x] 实现消息列表：用 BubbleList 组件渲染，内置虚拟滚动支持超长对话（1000+ 条）
+- [x] 实现消息分组渲染：SystemMessage / UserMessage / AssistantMessage → BubbleList 内置
+- [x] 实现新消息自动滚动到底部，用户手动上滚时不强制滚动 → BubbleList 内置
+- [x] 实现 ScrollToBottomButton：用户上滚后显示浮按钮
 
 ### SystemMessage
-- [ ] 实现系统通知：模型切换提示、上下文截断警告
+- [x] 实现系统通知：模型切换提示、上下文截断警告
 
 ### UserMessage — [Element-Plus-X: Bubble]
-- [ ] 实现用户消息气泡（右对齐，主题色背景）→ Bubble role="user"
-- [ ] 实现 Markdown 渲染用户消息内容
-- [ ] 实现悬停显示操作按钮：复制、编辑、删除 → Bubble 内置
+- [x] 实现用户消息气泡（右对齐，主题色背景）→ Bubble role="user"
+- [x] 实现 Markdown 渲染用户消息内容
+- [x] 实现悬停显示操作按钮：复制、编辑、删除 → Bubble 内置
 
 ### AssistantMessage — [Element-Plus-X: Bubble + ThoughtChain + Thinking]
-- [ ] 实现 AI 消息气泡（左对齐，带模型头像 + ModelBadge）→ Bubble role="assistant"
-- [ ] 实现 ThinkingBlock：可折叠的推理过程区域 → Thinking 组件
-- [ ] 实现 ThoughtChain：多步推理链展示 → ThoughtChain 组件
-- [ ] 实现 ToolCallCard：工具调用展示卡片（名称 + 参数 + 状态 + 结果可展开）
-- [ ] 实现 TokenUsageInfo：本条消息消耗 token 显示
-- [ ] 实现 StreamingCursor：流式输出中闪烁光标动画
-- [ ] 实现悬停显示操作按钮：复制、重新生成、继续、分支、点赞/点踩 → Bubble 内置
+- [x] 实现 AI 消息气泡（左对齐，带模型头像 + ModelBadge）→ Bubble role="assistant"
+- [x] 实现 ThinkingBlock：可折叠的推理过程区域 → Thinking 组件
+- [x] 实现 ThoughtChain：多步推理链展示 → ThoughtChain 组件
+- [x] 实现 ToolCallCard：工具调用展示卡片（名称 + 参数 + 状态 + 结果可展开）
+- [x] 实现 TokenUsageInfo：本条消息消耗 token 显示
+- [x] 实现 StreamingCursor：流式输出中闪烁光标动画
+- [x] 实现悬停显示操作按钮：复制、重新生成、继续、分支、点赞/点踩 → Bubble 内置
 
 ### MarkdownRenderer — [x-markdown-vue: MarkdownRenderer]
-- [ ] 集成 x-markdown-vue MarkdownRenderer（代码高亮 Shiki + 流式渲染 + LaTeX + Mermaid + 深色模式）
-- [ ] 实现 XSS 防护
-- [ ] 实现图片点击放大（灯箱模式）
+- [x] 集成 x-markdown-vue MarkdownRenderer（代码高亮 Shiki + 流式渲染 + LaTeX + Mermaid + 深色模式）
+- [x] 实现 XSS 防护
+- [x] 实现图片点击放大（灯箱模式）
 
 ### MessageActions
-- [ ] 实现复制消息：复制纯文本和 Markdown 两种模式可选
-- [ ] 实现 InlineEditor：点击编辑按钮 → 用户消息变为可编辑 textarea → 保存/取消
-- [ ] 实现 RegenerateButton：重新生成 AI 回复
-- [ ] 实现 ContinueButton：截断消息显示"继续生成"按钮
-- [ ] 实现 BranchButton → BranchDialog：确认 fork 并跳转新对话
-- [ ] 实现 LikeButton/DislikeButton → 点赞/点踩
+- [x] 实现复制消息：复制纯文本和 Markdown 两种模式可选
+- [x] 实现 InlineEditor：点击编辑按钮 → 用户消息变为可编辑 textarea → 保存/取消
+- [x] 实现 RegenerateButton：重新生成 AI 回复
+- [x] 实现 ContinueButton：截断消息显示"继续生成"按钮
+- [x] 实现 BranchButton → BranchDialog：确认 fork 并跳转新对话
+- [x] 实现 LikeButton/DislikeButton → 点赞/点踩
 
 ### ChatInput — [Element-Plus-X: XSender]
-- [ ] 实现自适应高度输入框 → XSender 内置（min 1行 / max 8行）
-- [ ] 实现 Enter 发送 / Shift+Enter 换行 → XSender 内置
-- [ ] 实现 ModelSelectorTrigger（内嵌模型切换入口）→ XSender 内置
-- [ ] 实现 SendButton（发送中显示 StopButton）→ XSender 内置
-- [ ] 实现字数统计 / Token 估算显示
-- [ ] 实现粘贴图片自动上传（clipboard paste event）
-- [ ] 实现拖拽文件到输入框触发上传
+- [x] 实现自适应高度输入框 → XSender 内置（min 1行 / max 8行）
+- [x] 实现 Enter 发送 / Shift+Enter 换行 → XSender 内置
+- [x] 实现 ModelSelectorTrigger（内嵌模型切换入口）→ XSender 内置
+- [x] 实现 SendButton（发送中显示 StopButton）→ XSender 内置
+- [x] 实现字数统计 / Token 估算显示
+- [x] 实现粘贴图片自动上传（clipboard paste event）
+- [x] 实现拖拽文件到输入框触发上传
 
 ### Welcome / Prompts — [Element-Plus-X: Welcome + Prompts]
-- [ ] 实现 Welcome 欢迎页：无对话时展示 → Welcome 组件
-- [ ] 实现 Prompts 提示集：快捷引导提示 → Prompts 组件
+- [x] 实现 Welcome 欢迎页：无对话时展示 → Welcome 组件
+- [x] 实现 Prompts 提示集：快捷引导提示 → Prompts 组件
 
 ## API 层 — [hook-fetch: request + useXStream]
 
-- [ ] 封装 `POST /api/chat/stream` → useXStream SSE 连接管理
-- [ ] 封装 `POST /api/chat/stop` → `request.post`
-- [ ] 封装 `POST /api/messages/:id/regenerate` → `request.post`
-- [ ] 封装 `POST /api/messages/:id/continue` → `request.post`
-- [ ] 封装 `PUT /api/messages/:id` → `request.put`
-- [ ] 封装 `DELETE /api/messages/:id` → `request.delete`
-- [ ] 封装 `POST /api/messages/:id/fork` → `request.post`
-- [ ] 封装 `POST /api/messages/:id/feedback` → `request.post`
-- [ ] 封装 `GET /api/conversations/:id/messages` → `request.get`（分页加载历史消息）
+- [x] 封装 `POST /api/chat/stream` → useXStream SSE 连接管理
+- [x] 封装 `POST /api/chat/stop` → `request.post`
+- [x] 封装 `POST /api/messages/:id/regenerate` → `request.post`
+- [x] 封装 `POST /api/messages/:id/continue` → `request.post`
+- [x] 封装 `PUT /api/messages/:id` → `request.put`
+- [x] 封装 `DELETE /api/messages/:id` → `request.delete`
+- [x] 封装 `POST /api/messages/:id/fork` → `request.post`
+- [x] 封装 `POST /api/messages/:id/feedback` → `request.post`
+- [x] 封装 `GET /api/conversations/:id/messages` → `request.get`（分页加载历史消息）
 
 ## 依赖接口
 

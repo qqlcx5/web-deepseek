@@ -36,27 +36,27 @@ AIGC:
 - [ ] 实现选择模型后：更新当前对话 modelId + 输入框提示更新
 
 ### ModelParametersPanel — [ElSlider / ElInputNumber]
-- [ ] 实现 Temperature 控制器：Slider（ElSlider）+ 数字输入框（ElInputNumber）（0-2，步长 0.1）
-- [ ] 实现 TopP 控制器：ElSlider + ElInputNumber（0-1，步长 0.01）
-- [ ] 实现 MaxTokens 控制器：ElInputNumber
-- [ ] 实现高级参数折叠区：PresencePenalty + FrequencyPenalty（ElInputNumber，-2 到 2）
+- [x] 实现 Temperature 控制器：Slider（ElSlider）+ 数字输入框（ElInputNumber）（0-2，步长 0.1）
+- [x] 实现 TopP 控制器：ElSlider + ElInputNumber（0-1，步长 0.01）
+- [x] 实现 MaxTokens 控制器：ElInputNumber
+- [x] 实现高级参数折叠区：PresencePenalty + FrequencyPenalty（ElInputNumber，-2 到 2）
 
 ### TokenUsageBar — [自定义组件 + ElProgress]
-- [ ] 实现进度条组件：已用/总数，颜色分级（绿 <60% / 黄 60-90% / 红 >90%）→ ElProgress
-- [ ] 实现 Token 数字标签："12,345 / 128,000 tokens"
-- [ ] 实现接近上限时的警告提示（黄色/红色文字 + 图标）
+- [x] 实现进度条组件：已用/总数，颜色分级（绿 <60% / 黄 60-90% / 红 >90%）→ ElProgress
+- [x] 实现 Token 数字标签："12,345 / 128,000 tokens"
+- [x] 实现接近上限时的警告提示（黄色/红色文字 + 图标）
 
 ### ProviderSettingsPage — [ElForm + ElInput + ElSwitch]
-- [ ] 实现 ProviderCard 列表：每个 Provider 显示 Logo + 名称 → ElCard
-- [ ] 实现 API Key 输入框（password 类型，已有密钥显示 ****）→ ElInput type="password"
-- [ ] 实现"测试连接"按钮（ElButton）+ 结果显示（成功/失败图标）
-- [ ] 实现 BaseUrlInput（仅自定义 Provider 可见）→ ElInput
-- [ ] 实现启用/禁用开关 → ElSwitch
-- [ ] 实现"添加自定义 Provider"卡片：名称 + Base URL + API Key 表单 → ElForm
+- [x] 实现 ProviderCard 列表：每个 Provider 显示 Logo + 名称 → ElCard
+- [x] 实现 API Key 输入框（password 类型，已有密钥显示 ****）→ ElInput type="password"
+- [x] 实现"测试连接"按钮（ElButton）+ 结果显示（成功/失败图标）
+- [x] 实现 BaseUrlInput（仅自定义 Provider 可见）→ ElInput
+- [x] 实现启用/禁用开关 → ElSwitch
+- [x] 实现"添加自定义 Provider"卡片：名称 + Base URL + API Key 表单 → ElForm
 
 ## Token 估算工具
 
-- [ ] 实现 `estimateTokens(text: string): number`：按需加载 tiktoken WASM 或使用近似公式
+- [x] 实现 `estimateTokens(text: string): number`：按需加载 tiktoken WASM 或使用近似公式
 
 ## API 层 — [hook-fetch: request]
 

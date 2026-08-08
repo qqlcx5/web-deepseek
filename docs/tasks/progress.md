@@ -16,22 +16,22 @@ AIGC:
 
 ## 全局进度
 
-- [ ] **V2 页面结构** — 0 / 16 任务（[v2-page-structure.md](./v2-page-structure.md)）
-- [ ] **对话管理** — 0 / 26 任务（[conversation-management.md](./conversation-management.md)）
-- [ ] **工作区** — 0 / 15 任务（[workspace.md](./workspace.md)）
-- [ ] **模型控制** — 0 / 23 任务（[model-control.md](./model-control.md)）
-- [ ] **消息功能** — 0 / 36 任务（[message-features.md](./message-features.md)）
-- [ ] **附件系统** — 0 / 19 任务（[attachment-system.md](./attachment-system.md)）
+- [x] **V2 页面结构** — 16 / 16 任务（[v2-page-structure.md](./v2-page-structure.md)）
+- [x] **对话管理** — 26 / 26 任务（[conversation-management.md](./conversation-management.md)）
+- [x] **工作区** — 15 / 15 任务（[workspace.md](./workspace.md)）
+- [x] **模型控制** — 23 / 23 任务（[model-control.md](./model-control.md)）
+- [x] **消息功能** — 36 / 36 任务（[message-features.md](./message-features.md)）
+- [x] **附件系统** — 19 / 19 任务（[attachment-system.md](./attachment-system.md)）
 - [ ] **导出与迁移** — 0 / 19 任务（[export-migration.md](./export-migration.md)）
 - [ ] **搜索** — 0 / 15 任务（[search.md](./search.md)）
-- [ ] **设置** — 0 / 22 任务（[settings.md](./settings.md)）
+- [x] **设置** — 22 / 22 任务（[settings.md](./settings.md)）
 - [x] **响应式体验** — 21 / 21 任务（[responsive-experience.md](./responsive-experience.md)）
 - [x] **系统状态** — 19 / 19 任务（[system-status.md](./system-status.md)）
 - [ ] **管理端原型** — 0 / 28 任务（[admin-console.md](./admin-console.md)）
 
 ---
 
-## 总计：40 / 259
+## 总计：116 / 259
 
 ---
 

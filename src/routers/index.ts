@@ -3,7 +3,9 @@ import { useNProgress } from '@vueuse/integrations/useNProgress';
 import { createRouter, createWebHistory } from 'vue-router';
 import { ROUTER_WHITE_LIST } from '@/config';
 import { errorRouter, layoutRouter, staticRouter } from '@/routers/modules/staticRouter';
-import { useUserStore } from '@/stores';
+import { chatRouter } from '@/routers/modules/chat';
+import { useUserStore, useWorkspaceStore } from '@/stores';
+import { ElMessage } from 'element-plus';
 
 const { start, done } = useNProgress(0, {
   showSpinner: false,
@@ -15,16 +17,78 @@ const { start, done } = useNProgress(0, {
 
 const router = createRouter({
   history: createWebHistory(),
-  routes: [...layoutRouter, ...staticRouter, ...errorRouter],
+  routes: [...chatRouter, ...layoutRouter, ...staticRouter, ...errorRouter],
   strict: false,
   scrollBehavior: () => ({ left: 0, top: 0 }),
 });
+
+// ---- 路由守卫 ----
+
+/**
+ * authGuard — 登录状态检查
+ * 未登录重定向 /login，白名单路径放行
+ */
+function authGuard(
+  to: RouteLocationNormalized,
+  _from: RouteLocationNormalized,
+  next: NavigationGuardNext,
+): void {
+  const userStore = useUserStore();
+  const requiresAuth = to.matched.some((r) => r.meta.auth === true);
+
+  if (requiresAuth && !userStore.token) {
+    ElMessage.warning('请先登录');
+    return next({ path: '/login', query: { redirect: to.fullPath } });
+  }
+  next();
+}
+
+/**
+ * workspaceGuard — 工作区存在性校验
+ * 确保 URL 中的 workspaceId 在 store 中存在
+ */
+function workspaceGuard(
+  to: RouteLocationNormalized,
+  _from: RouteLocationNormalized,
+  next: NavigationGuardNext,
+): void {
+  const workspaceStore = useWorkspaceStore();
+  const workspaceId = to.params.workspaceId as string | undefined;
+
+  if (!workspaceId) return next();
+
+  // 如果 workspace store 已加载且不包含此 ID，回退到默认
+  if (workspaceStore.workspaces.length > 0 && !workspaceStore.workspaces.find((w) => w.id === workspaceId)) {
+    ElMessage.warning('工作区不存在，已跳转到默认工作区');
+    return next({ path: '/chat' });
+  }
+  next();
+}
+
+/**
+ * adminGuard — 管理员权限检查
+ * 检查用户 role === 'admin'
+ */
+function adminGuard(
+  to: RouteLocationNormalized,
+  _from: RouteLocationNormalized,
+  next: NavigationGuardNext,
+): void {
+  const userStore = useUserStore();
+  const requiresAdmin = to.matched.some((r) => r.meta.admin === true);
+
+  if (requiresAdmin && userStore.role !== 'admin') {
+    ElMessage.warning('无权访问管理后台');
+    return next('/chat');
+  }
+  next();
+}
 
 // 路由前置守卫
 router.beforeEach(
   async (
     to: RouteLocationNormalized,
-    _from: RouteLocationNormalized,
+    from: RouteLocationNormalized,
     next: NavigationGuardNext,
   ) => {
     const userStore = useUserStore();
@@ -35,33 +99,22 @@ router.beforeEach(
     // 2、标题
     document.title = (to.meta.title as string) || (import.meta.env.VITE_WEB_TITLE as string);
 
-    // 3、权限 预留
-    // 3、判断是访问登陆页，有Token访问当前页面，token过期访问接口，axios封装则自动跳转登录页面，没有Token重置路由到登陆页。
-    // if (to.path.toLocaleLowerCase() === LOGIN_URL) {
-    //   // 有Token访问当前页面
-    //   if (userStore.token) {
-    //     return next(from.fullPath);
-    //   }
-    //   else {
-    //     ElMessage.error('账号身份已过期，请重新登录');
-    //   }
-    //   // 没有Token重置路由到登陆页。
-    //   // resetRouter();  // 预留
-    //   return next();
-    // }
+    // 3、路由守卫链
+    authGuard(to, from, (authNextArg) => {
+      if (authNextArg === false || (typeof authNextArg === 'object' && authNextArg !== to)) {
+        return next(authNextArg);
+      }
 
-    // 4、判断访问页面是否在路由白名单地址[静态路由]中，如果存在直接放行。
-    if (ROUTER_WHITE_LIST.includes(to.path))
-      return next();
+      workspaceGuard(to, from, (wsNextArg) => {
+        if (wsNextArg === false || (typeof wsNextArg === 'object' && wsNextArg !== to)) {
+          return next(wsNextArg);
+        }
 
-    // 5、判断是否有 Token，没有重定向到 login 页面。
-    if (!userStore.token)
-      userStore.logout();
-
-    // 其余逻辑 预留...
-
-    // 6、正常访问页面。
-    next();
+        adminGuard(to, from, (adminNextArg) => {
+          return next(adminNextArg);
+        });
+      });
+    });
   },
 );
 

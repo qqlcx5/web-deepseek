@@ -70,9 +70,5 @@ export const errorRouter = [
       isAffix: '1', // 是否缓存固定路由[0是，1否]
     },
   },
-  // 找不到path将跳转404页面
-  {
-    path: '/:pathMatch(.*)*',
-    component: () => import('@/pages/error/404.vue'),
-  },
+  // catch-all 404 已迁移至 chat.ts V2 路由表
 ];

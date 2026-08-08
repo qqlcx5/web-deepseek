@@ -1,3 +1,10 @@
+export * from './model';
+export * from './message';
+export * from './settings';
+export * from './workspace';
+export * from './conversation';
+export * from './attachment';
+
 /**
  * Cherry Studio Web - 数据层类型定义
  *

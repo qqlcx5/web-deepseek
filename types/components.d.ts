@@ -28,8 +28,10 @@ declare module 'vue' {
     FabButton: typeof import('./../src/components/system/FabButton/index.vue')['default']
     FilesSelect: typeof import('./../src/components/FilesSelect/index.vue')['default']
     IconSelect: typeof import('./../src/components/IconSelect/index.vue')['default']
+    Index_20260808_131048_967: typeof import('./../src/components/ModelSelect/index_20260808_131048_967.vue')['default']
     LoginDialog: typeof import('./../src/components/LoginDialog/index.vue')['default']
     MessageListSkeleton: typeof import('./../src/components/skeleton/MessageListSkeleton.vue')['default']
+    ModelParametersPanel: typeof import('./../src/components/ModelParametersPanel/index.vue')['default']
     ModelSelect: typeof import('./../src/components/ModelSelect/index.vue')['default']
     NetworkStatusBar: typeof import('./../src/components/system/NetworkStatusBar/index.vue')['default']
     NoAttachmentsEmpty: typeof import('./../src/components/empty/NoAttachmentsEmpty.vue')['default']
@@ -44,9 +46,11 @@ declare module 'vue' {
     SvgIcon: typeof import('./../src/components/SvgIcon/index.vue')['default']
     TabBar: typeof import('./../src/components/system/TabBar/index.vue')['default']
     ToastContainer: typeof import('./../src/components/system/ToastContainer/index.vue')['default']
+    TokenUsageBar: typeof import('./../src/components/TokenUsageBar/index.vue')['default']
     TopBar: typeof import('./../src/components/system/TopBar/index.vue')['default']
     VerificationCode: typeof import('./../src/components/LoginDialog/components/FormLogin/VerificationCode.vue')['default']
     WelecomeText: typeof import('./../src/components/WelecomeText/index.vue')['default']
+    WorkspaceSwitcher: typeof import('./../src/components/WorkspaceSwitcher/index.vue')['default']
   }
   export interface GlobalDirectives {
     vLoading: typeof import('element-plus/es')['ElLoadingDirective']
