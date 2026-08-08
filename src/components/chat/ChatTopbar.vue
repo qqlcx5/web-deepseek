@@ -15,7 +15,7 @@ const { isDark, toggleTheme } = useTheme()
       data-tip="显示侧栏"
       @click="store.focusMode = false"
     >
-      <Icon icon="tabler:panel-left-open" />
+      <Icon icon="tabler:layout-sidebar-left-expand" />
     </button>
     <button class="icon-btn mobile-only" @click="store.sidebarOpen = true">
       <Icon icon="tabler:menu" />
@@ -61,7 +61,7 @@ const { isDark, toggleTheme } = useTheme()
       :class="{ active: store.focusMode }"
       @click="store.toggleFocusMode()"
     >
-      <Icon icon="tabler:maximize-2" />
+      <Icon icon="tabler:maximize" />
     </button>
 
     <button
@@ -70,7 +70,7 @@ const { isDark, toggleTheme } = useTheme()
       :class="{ active: store.inspectorVisible || store.inspectorOpen }"
       @click="store.toggleInspector()"
     >
-      <Icon icon="tabler:panel-right" />
+      <Icon icon="tabler:layout-sidebar-right" />
     </button>
   </header>
 

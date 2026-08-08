@@ -85,7 +85,7 @@ defineExpose({ composer, resizeComposer })
           <Icon icon="tabler:paperclip" />
         </button>
         <button class="icon-btn tooltip" data-tip="添加图片" @click="fileInput?.click()">
-          <Icon icon="tabler:image" />
+          <Icon icon="tabler:photo" />
         </button>
         <span class="composer-hint">Enter 发送 · Shift + Enter 换行</span>
 

@@ -93,7 +93,7 @@ defineExpose({ scrollToBottom })
               <!-- Sources -->
               <div v-if="message.sources?.length" class="sources">
                 <div class="sources-title">
-                  <Icon icon="tabler:book-open" width="14" />
+                  <Icon icon="tabler:books" width="14" />
                   引用来源
                 </div>
                 <div class="source-list">
@@ -123,7 +123,7 @@ defineExpose({ scrollToBottom })
                   <span class="artifact-meta">{{ message.artifact.meta }}</span>
                 </span>
                 <button class="secondary" @click="store.showToast('已在右侧打开产物预览')">
-                  <Icon icon="tabler:panel-right-open" width="13" />
+                  <Icon icon="tabler:layout-sidebar-right-expand" width="13" />
                   打开
                 </button>
               </div>
@@ -139,7 +139,7 @@ defineExpose({ scrollToBottom })
                   :class="{ active: message.rating === 'up' }"
                   @click="store.rateMessage(message, 'up')"
                 >
-                  <Icon icon="tabler:thumbs-up" />
+                  <Icon icon="tabler:thumb-up" />
                 </button>
                 <button
                   class="message-tool tooltip"
@@ -147,10 +147,10 @@ defineExpose({ scrollToBottom })
                   :class="{ active: message.rating === 'down' }"
                   @click="store.rateMessage(message, 'down')"
                 >
-                  <Icon icon="tabler:thumbs-down" />
+                  <Icon icon="tabler:thumb-down" />
                 </button>
                 <button class="message-tool tooltip" data-tip="重新生成" @click="store.regenerate(message)">
-                  <Icon icon="tabler:rotate-cw" />
+                  <Icon icon="tabler:rotate-clockwise" />
                 </button>
                 <button class="message-tool tooltip" data-tip="从这里分支" @click="store.branchFrom(message)">
                   <Icon icon="tabler:git-branch" />

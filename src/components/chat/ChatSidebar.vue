@@ -9,7 +9,7 @@ const store = useChatStore()
   <aside class="sidebar" :class="{ open: store.sidebarOpen }">
     <div class="brand">
       <div class="brand-mark">
-        <Icon icon="tabler:orbit" width="17" />
+        <Icon icon="tabler:rocket" width="17" />
       </div>
       <div class="brand-copy">
         <div class="brand-name">Orbit AI</div>
@@ -23,7 +23,7 @@ const store = useChatStore()
         data-tip="收起侧栏"
         @click="store.focusMode = true"
       >
-        <Icon icon="tabler:panel-left-close" />
+        <Icon icon="tabler:layout-sidebar-left-collapse" />
       </button>
       <button class="icon-btn mobile-only" @click="store.sidebarOpen = false">
         <Icon icon="tabler:x" />
@@ -32,7 +32,7 @@ const store = useChatStore()
 
     <div class="sidebar-actions">
       <button class="primary new-chat" @click="store.newConversation()">
-        <Icon icon="tabler:square-pen" width="15" />
+        <Icon icon="tabler:edit" width="15" />
         新建对话
       </button>
       <button class="search-trigger" @click="store.modal = 'command'">
@@ -63,7 +63,7 @@ const store = useChatStore()
         @click="store.openConversation(chat.id)"
       >
         <Icon
-          :icon="chat.pinned ? 'tabler:pin' : 'tabler:message-square'"
+          :icon="chat.pinned ? 'tabler:pin' : 'tabler:message'"
           class="chat-icon"
         />
         <span class="chat-copy">
@@ -79,7 +79,7 @@ const store = useChatStore()
         <span class="profile-name">林晓舟</span>
         <span class="profile-plan">个人空间 · 免费计划</span>
       </span>
-      <Icon icon="tabler:chevrons-up-down" width="15" />
+      <Icon icon="tabler:selector" width="15" />
     </button>
   </aside>
 </template>

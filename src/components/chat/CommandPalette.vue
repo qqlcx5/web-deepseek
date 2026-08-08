@@ -47,7 +47,7 @@ onMounted(() => {
         class="command-item"
         @click="store.openConversation(chat.id); store.modal = ''"
       >
-        <Icon icon="tabler:message-square" />
+        <Icon icon="tabler:message" />
         <span class="command-item-copy">
           <span class="command-item-title">{{ chat.title }}</span>
           <span class="command-item-desc">{{ chat.preview }}</span>

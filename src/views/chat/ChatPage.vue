@@ -65,7 +65,7 @@ document.addEventListener('keydown', handleKeydown)
 
     <nav class="mobile-nav">
       <button class="active" @click="store.sidebarOpen = true">
-        <Icon icon="tabler:messages-square" />
+        <Icon icon="tabler:messages" />
         对话
       </button>
       <button @click="store.modal = 'command'">
@@ -77,7 +77,7 @@ document.addEventListener('keydown', handleKeydown)
         文件
       </button>
       <button @click="store.inspectorOpen = true">
-        <Icon icon="tabler:sliders-horizontal" />
+        <Icon icon="tabler:adjustments-horizontal" />
         会话
       </button>
     </nav>

@@ -117,7 +117,7 @@ export const useChatStore = defineStore('chat', () => {
   ]
 
   const commands: Command[] = [
-    { title: '新建对话', description: '在当前工作区创建空白对话', icon: 'square-pen', shortcut: '⌘ N', action: 'new' },
+    { title: '新建对话', description: '在当前工作区创建空白对话', icon: 'edit', shortcut: '⌘ N', action: 'new' },
     { title: '切换模型', description: '选择当前会话使用的 AI 模型', icon: 'sparkles', action: 'model' },
     { title: '编辑系统提示词', description: '修改当前会话的行为和回答风格', icon: 'bot', action: 'prompt' },
     { title: '切换专注模式', description: '隐藏侧栏和会话信息面板', icon: 'maximize-2', shortcut: '⌘ ⇧ F', action: 'focus' },
