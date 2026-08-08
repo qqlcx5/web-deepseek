@@ -1,0 +1,562 @@
+{
+  /* --------------------------------- editor --------------------------------- */
+  "editor.fontSize": 18, // 控制编辑器的字体大小。
+  "editor.tabSize": 2, // 控制编辑器中制表符的宽度。整数值。
+  "editor.tabCompletion": "on", // 在按下 Tab 键时进行 Tab 补全，将插入最佳匹配建议。
+  "editor.suggest.showSnippets": true, // 启用后，IntelliSense 将显示“片段”建议。
+  "editor.insertSpaces": true,
+  "editor.suggestSelection": "first", // 每当显示内联建议时，显示内联建议工具栏。
+  "editor.suggest.snippetsPreventQuickSuggestions": false, // 控制活动代码段是否阻止快速建议。
+  "editor.inlineSuggest.showToolbar": "always", // 每当显示内联建议时，显示内联建议工具栏。
+  "editor.bracketPairColorization.independentColorPoolPerBracketType": true, // 控制每个方括号类型是否具有自己的独立颜色池。
+  "editor.linkedEditing": true, // 启用或禁用链接编辑。
+  "editor.stickyScroll.enabled": true,
+  "editor.accessibilitySupport": "off", // 控制编辑器是否应运行在无障碍模式下。
+  "editor.cursorSmoothCaretAnimation": "on", // 启用或禁用光标平滑过渡动画。
+  "editor.detectIndentation": false, // 控制在基于文件内容打开文件时是否自动检测
+  "editor.fontLigatures": true,
+  "editor.renderControlCharacters": true, // 控制编辑器是否应呈现控制字符。
+  "editor.renderWhitespace": "boundary", // 控制编辑器是否应呈现空格。
+  "editor.smoothScrolling": true, // 控制编辑器是否使用动画滚动。
+  "editor.cursorBlinking": "smooth", // 控制编辑器小地图是否应呈现字符。
+  "editor.minimap.autohide": true, // 控制编辑器小地图是否应自动隐藏。
+  "editor.minimap.enabled": true, // 控制编辑器小地图是否应呈现字符。
+  // 控制键入时是否应自动显示建议。这可以用于在注释、字符串和其他代码中键入时进行控制。
+  "editor.quickSuggestions": {
+    "comments": "on",
+    "strings": "on",
+    "other": "on"
+  },
+  // antfu 独有编辑器配置
+  "editor.fontFamily": "Maple Mono NF CN",
+  "editor.guides.bracketPairs": "active",
+  "editor.lineNumbers": "interval",
+  "editor.wordSeparators": "`~!@#%^&*()=+[{]}\\|;:'\",.<>/?",
+  "editor.find.addExtraSpaceOnTop": false,
+  "editor.inlineSuggest.enabled": true,
+  "editor.multiCursorModifier": "ctrlCmd",
+  "editor.unicodeHighlight.invisibleCharacters": false,
+  "editor.hover.sticky": true,
+  "editor.codeActionsOnSave": {
+    "source.fixAll": "never",
+    "source.fixAll.eslint": "explicit",
+    "source.organizeImports": "never"
+    // "source.organizeImports": "explicit" // ⚠️警告会添加分号
+  },
+
+  /* -------------------------- workbench / window ---------------------------- */
+  "workbench.colorTheme": "One Dark Pro",
+  "workbench.iconTheme": "material-icon-theme",
+  "workbench.commandPalette.preserveInput": true, // 保留命令面板中的输入内容。
+  "workbench.editor.scrollToSwitchTabs": true, // 控制在切换选项卡时是否滚动到顶部。
+  "workbench.startupEditor": "welcomePage", // 控制在启动时打开的编辑器。
+  "security.workspace.trust.untrustedFiles": "open",
+
+  // antfu 独有 workbench 配置
+  "window.autoDetectColorScheme": true,
+  "workbench.editor.tabActionLocation": "left",
+  "workbench.fontAliasing": "antialiased",
+  "workbench.list.smoothScrolling": true,
+  "workbench.preferredDarkColorTheme": "One Dark Pro",
+  "workbench.preferredLightColorTheme": "One Dark Pro",
+  // "workbench.productIconTheme": "material-icon-theme",
+  // "workbench.sideBar.location": "right",
+  "workbench.tree.expandMode": "singleClick",
+  "workbench.tree.indent": 10,
+  "workbench.editor.closeOnFileDelete": true,
+  "workbench.editor.highlightModifiedTabs": true,
+  "workbench.editor.limit.enabled": true,
+  "workbench.editor.limit.perEditorGroup": true,
+  "workbench.editor.limit.value": 5,
+  "workbench.editor.autoLockGroups": {
+    "default": true
+  },
+  "window.dialogStyle": "custom",
+  "window.nativeTabs": true, // this is great, macOS only
+  "window.title": "${rootName}", // this make tabs more readable
+  "window.titleBarStyle": "custom",
+  "extensions.autoUpdate": "onlyEnabledExtensions",
+  "window.commandCenter": true, // 将命令启动器与窗口标题一起显示。
+  "window.closeWhenEmpty": true,
+  "window.newWindowDimensions": "inherit",
+
+  /* ------------------------- Language configuration ------------------------- */
+  "[vue]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.codeActionsOnSave": {
+      "source.fixAll": "explicit",
+      "source.fixAll.eslint": "explicit",
+      "source.fixAll.stylelint": "explicit"
+    }
+  },
+  "[javascript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[html]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[scss]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[json]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[jsonc]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[typescriptreact]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[typescript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[markdown]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+
+  /* ---------------------------------- emmet --------------------------------- */
+  // emmet 包含 wxml 视为 html
+  "emmet.includeLanguages": {
+    "wxml": "html",
+    "vue": "html",
+    "vue-html": "html",
+    "javascript": "javascriptreact"
+  },
+  // 用于 Emmet 代码片段的变量。
+  "emmet.variables": {
+    "lang": "zh-CN",
+    "charset": "UTF-8"
+  },
+  // 为指定的语法定义配置文件或使用带有特定规则的配置文件。
+  "emmet.syntaxProfiles": {
+    "vue-html": "html",
+    "vue": "html"
+  },
+  "emmet.showAbbreviationSuggestions": true, // 在输入时显示 Emmet 缩写建议。
+  "emmet.showExpandedAbbreviation": "always", // 在输入时显示 Emmet 缩写展开。
+  "emmet.triggerExpansionOnTab": false, // 按 Tab 时会展开 Emmet 缩写，即使未显示完成。
+  // antfu 独有 emmet 配置
+  "emmet.showSuggestionsAsSnippets": true,
+
+  /* ----------------------------------- vue ---------------------------------- */
+  "vue.autoInsert.dotValue": true, // 在对象文字中插入点值。
+  "vue.hover.rich": true,
+  "vue-helper.show-new-after-upgrade": false,
+  "vue-helper.framework": "element-plus",
+  /* ----------------------------------- git ---------------------------------- */
+  "git.enableSmartCommit": true, // 在没有暂存的更改时提交所有更改。
+  "git.confirmSync": false, // 同步 Git 存储库前请先进行确认。
+  "git.autofetch": true, // 在差异编辑器中忽略空格。
+  "diffEditor.renderSideBySide": true, // 在差异编辑器中呈现差异的一侧。
+  "diffEditor.ignoreTrimWhitespace": false,
+  "git.ignoreRebaseWarning": true, // 忽略重新基础操作时的警告。
+  "git-graph.date.format": "ISO Date & Time", // 日期格式。
+  // antfu 独有 git 配置
+  "git.untrackedChanges": "separate",
+  "scm.diffDecorationsGutterWidth": 2,
+
+  /* -------------------------------- gitlens -------------------------------- */
+  "gitlens.defaultDateFormat": "YYYY-MM-DD HH:mm",
+  "gitlens.defaultDateShortFormat": "YYYY-MM-DD",
+  "gitlens.defaultTimeFormat": "HH:mm",
+  "gitlens.gitCommands.closeOnFocusOut": true,
+  "gitlens.views.repositories.branches.layout": "list",
+  "gitlens.advanced.messages": {
+    "suppressCommitNotFoundWarning": true,
+    "suppressRebaseSwitchToTextWarning": true
+  },
+  // antfu 独有 gitlens 配置
+  "gitlens.codeLens.authors.enabled": false,
+  "gitlens.codeLens.enabled": false,
+  "gitlens.codeLens.recentChange.enabled": false,
+  "gitlens.menus": {
+    "editor": {
+      "blame": false,
+      "clipboard": true,
+      "compare": true,
+      "history": false,
+      "remote": false
+    },
+    "editorGroup": {
+      "blame": true,
+      "compare": false
+    },
+    "editorTab": {
+      "clipboard": true,
+      "compare": true,
+      "history": true,
+      "remote": true
+    },
+    "explorer": {
+      "clipboard": true,
+      "compare": true,
+      "history": true,
+      "remote": true
+    },
+    "scm": {
+      "authors": true
+    },
+    "scmGroup": {
+      "compare": true,
+      "openClose": true,
+      "stash": true
+    },
+    "scmGroupInline": {
+      "stash": true
+    },
+    "scmItem": {
+      "clipboard": true,
+      "compare": true,
+      "history": true,
+      "remote": false,
+      "stash": true
+    }
+  },
+
+  /* ------------------------------ search/files ------------------------------ */
+  // 搜索时排除 .gitignore 文件。 search.useIgnoreFiles
+  "search.useIgnoreFiles": true,
+  // 搜索时排除文件。
+  "search.exclude": {
+    "**/*.snap": true,
+    "**/*.svg": true,
+    "**/.git": true,
+    "**/.github": false,
+    "**/.nuxt": true,
+    "**/.output": true,
+    "**/.pnpm": true,
+    "**/.vscode": true,
+    "**/.yarn": true,
+    "**/assets": true,
+    "**/bower_components": true,
+    "**/dist/**": true,
+    "**/logs": true,
+    "**/node_modules": true,
+    "**/out/**": true,
+    "**/package-lock.json": true,
+    "**/pnpm-lock.yaml": true,
+    "**/public": true,
+    "**/temp": true,
+    "**/yarn.lock": true,
+    "**/CHANGELOG*": true,
+    "**/LICENSE*": true
+  },
+  // 文件不会显示在工作空间
+  "files.exclude": {
+    "**/.git": true,
+    "tmpclaude-*": true
+  },
+  // 文件关联
+  // "files.associations": {
+  //   "*.nvue": "vue"
+  // },
+  "files.eol": "\r\n", // 换行符
+  "files.trimTrailingWhitespace": true, // 去除尾部空格
+  "files.trimFinalNewlines": true,
+  "files.insertFinalNewline": true,
+  // antfu 独有 files 配置
+  "files.simpleDialog.enable": true,
+
+  /* ----------------------------- turboConsoleLog ---------------------------- */
+  "turboConsoleLog.quote": "`",
+  "turboConsoleLog.delimiterInsideMessage": "-",
+
+  /* ----------------------------- 驼峰翻译助手 baidu ---------------------------- */
+  "varTranslation.translationEngine": "baidu",
+  "varTranslation.baiduSecret": "20190710000316646,XnSV_tSrHPNLcq8aLvpv",
+
+  /* --------------------------------- 终端设置 -------------------------------- */
+  "terminal.external.linuxExec": "bash",
+  "terminal.integrated.confirmOnExit": "hasChildProcesses",
+  "terminal.integrated.copyOnSelection": true,
+  "terminal.integrated.defaultProfile.windows": "Windows PowerShell",
+  "terminal.integrated.defaultProfile.linux": "bash",
+  "terminal.integrated.env.linux": {
+    "NODE_OPTIONS": "--max_old_space_size=4096"
+  },
+  "terminal.integrated.env.windows": {
+    "NODE_OPTIONS": "--max_old_space_size=4096"
+  },
+  "terminal.integrated.profiles.windows": {
+    "PowerShell": {
+      "source": "PowerShell",
+      "overrideName": true,
+      "icon": "terminal-powershell",
+      "args": ["-NoLogo"]
+    }
+  },
+  "terminal.integrated.shellIntegration.enabled": true,
+  "terminal.integrated.smoothScrolling": true,
+  "terminal.integrated.tabs.enabled": true,
+  // antfu 独有 terminal 配置
+  "terminal.integrated.cursorBlinking": true,
+  "terminal.integrated.cursorStyle": "line",
+  "terminal.integrated.fontWeight": "300",
+  "terminal.integrated.persistentSessionReviveProcess": "never",
+
+  /* --------------------------------- npm --------------------------------- */
+  "npm.enableRunFromFolder": true,
+  "npm.packageManager": "auto",
+  "npm.scriptExplorerAction": "run",
+  // "npm-intellisense.importQuotes": "\"",
+  // "npm-intellisense.packageSubfoldersIntellisense": true,
+  // "npm-intellisense.scanDevDependencies": true,
+  // "npm-intellisense.showBuildInLibs": true,
+
+  /* ---------------------------- // typescript 配置 ---------------------------- */
+  // "javascript.format.semicolons": "insert",
+  // "javascript.referencesCodeLens.enabled": true,
+  // "javascript.suggest.completeFunctionCalls": true,
+  // "javascript.preferences.quoteStyle": "double",
+  // "javascript.updateImportsOnFileMove.enabled": "always",
+  // "javascript.preferences.importModuleSpecifierEnding": "js", // javascript 导入模块规范结束符。
+  // "typescript.preferences.importModuleSpecifierEnding": "js", // 导入模块规范结束符。
+  // "typescript.locale": "zh-CN",
+  // "typescript.enablePromptUseWorkspaceTsdk": true,
+  // "typescript.format.semicolons": "insert",
+  // "typescript.preferences.quoteStyle": "double",
+  // "typescript.referencesCodeLens.enabled": true,
+  // "typescript.suggest.completeFunctionCalls": true,
+  // "typescript.updateImportsOnFileMove.enabled": "always",
+
+  /* -------------------------------- // eslint ------------------------------- */
+  "eslint.validate": [
+    "javascript",
+    "javascriptreact",
+    "typescript",
+    "typescriptreact",
+    "vue",
+    "html",
+    "markdown",
+    "json",
+    "jsonc",
+    "yaml",
+    "toml"
+  ],
+  "eslint.format.enable": false, // 使用 Prettier 格式化，ESLint 只负责 linting
+  "eslint.codeAction.showDocumentation": {
+    "enable": true // 在快速修复菜单中显示打开的lint规则文档网页。
+  },
+  "eslint.quiet": true,
+  // Silent the stylistic rules in you IDE, but still auto fix them
+  "eslint.rules.customizations": [
+    { "rule": "style/*", "severity": "off" },
+    { "rule": "format/*", "severity": "off" },
+    { "rule": "*-indent", "severity": "off" },
+    { "rule": "*-spacing", "severity": "off" },
+    { "rule": "*-spaces", "severity": "off" },
+    { "rule": "*-order", "severity": "off" },
+    { "rule": "*-dangle", "severity": "off" },
+    { "rule": "*-newline", "severity": "off" },
+    { "rule": "*quotes", "severity": "off" },
+    { "rule": "*semi", "severity": "off" }
+  ],
+
+  /* -------------------------------- prettier -------------------------------- */
+  // [antfu 建议] antfu 配置中设置了 "prettier.enable": false，但 cursor 方案依赖 Prettier 作为 defaultFormatter。
+  "prettier.enable": false, // [antfu] 禁用 Prettier，使用 ESLint 统一格式化。与 cursor 当前方案冲突，已注释。
+  "prettier.vueIndentScriptAndStyle": true, // 缩进 Vue SFC 文件中的 <script> 和 <style> 标签。
+  // "prettier.requireConfig": true, // 🔴 重要：要求项目有 prettier 配置文件
+  // "prettier.useEditorConfig": false,
+  // "prettier.configPath": ".prettierrc.cjs",
+  // "prettier.enableDebugLogs": true,
+  // "prettier.experimentalTernaries": true,
+  // "prettier.tabWidth": 2, // 缩进字节数
+  // "prettier.printWidth": 200, // 超过最大值换行
+  // "prettier.useTabs": false, // 缩进不使用tab，使用空格
+  // "prettier.semi": true, // 句尾添加分号
+  // "prettier.singleQuote": true, // 使用单引号代替双引号
+  // "prettier.proseWrap": "preserve", // 默认值。因为使用了一些折行敏感型的渲染器（如GitHub comment）而按照markdown文本样式进行折行
+  // "prettier.arrowParens": "avoid", //  (x) => {} 箭头函数参数只有一个时是否要有小括号。avoid：省略括号
+  // "prettier.bracketSpacing": true, // 在对象，数组括号与文字之间加空格 "{ foo: bar }"
+  // "prettier.endOfLine": "lf", // 结尾 lf: Unix and Git, crlf: Windows, auto: Windows for .git files, lf for all other files
+  // "prettier.singleAttributePerLine": true,
+  // "prettier.htmlWhitespaceSensitivity": "ignore", // html空白字符不敏感
+  // "prettier.ignorePath": ".prettierignore", // 不使用prettier格式化的文件填写在项目的.prettierignore文件中
+  // "prettier.jsxSingleQuote": true, // 在jsx中使用单引号代替双引号
+  // "prettier.requireConfig": false, // Require a 'prettierconfig' to format prettier
+  // "prettier.trailingComma": "none", // 在对象或数组最后一个元素后面是否加逗号（在ES5中加尾逗号）
+  // antfu 独有 prettier 配置（仅手动格式化时参考）
+  "prettier.printWidth": 200,
+  "prettier.semi": false,
+  "prettier.singleQuote": true,
+
+  /* ---------------------------- stylus-supremacy ---------------------------- */
+  // "stylusSupremacy.insertColons": true, // 是否插入冒号
+  // "stylusSupremacy.insertSemicolons": true, // 是否插入分号
+  // "stylusSupremacy.insertBraces": true, // 是否插入大括号
+  // "stylusSupremacy.insertNewLineAroundImports": true, // import之后是否换行
+  // "stylusSupremacy.insertNewLineAroundBlocks": true,
+
+  /* ----------------------------- // markdown 设置 ----------------------------- */
+  // "markdown.validate.enabled": true, // 启用或禁用 Markdown 验证。
+  // "markdown.extension.orderedList.marker": "one",
+  // "markdown.extension.print.imgToBase64": true,
+
+  /* --------------------------- // markdownlint 设置 --------------------------- */
+  // "markdownlint.config": {
+  //   "default": true,
+  //   "MD003": {
+  //     "style": "atx"
+  //   },
+  //   "MD004": {
+  //     "style": "dash"
+  //   },
+  //   "MD013": false,
+  //   "MD024": {
+  //     "siblings_only": true
+  //   },
+  //   "MD035": {
+  //     "style": "---"
+  //   }
+  // },
+
+  /* -------------------------------- 项目管理器 -------------------------------- */
+  // "projectManager.sortList": "Saved",
+  // "projectManager.ignoreProjectsWithinProjects": true,
+  // "projectManager.any.ignoredFolders": [
+  //   "dist"
+  // ],
+
+  /* -------------------------------- blockman -------------------------------- */
+  // "editor.guides.indentation": false, // new API for indent guides. The old one is: "editor.renderIndentGuides": false,
+  // "editor.guides.bracketPairs": false, // advanced indent guides (But only for brackets) (This does not turn off editor.bracketPairColorization)
+  // "blockman.n21BorderRadius": 4,
+  // "blockman.n23AnalyzeSquareBrackets": true,
+  // "blockman.n24AnalyzeRoundBrackets": true,
+  // "blockman.n33A01B1FromDepth0ToInwardForAllBorders": "90,1,0,3; rgba(255, 255, 255, 0.05) > rgba(194, 59, 35, 0.35) > rgba(243, 154, 39, 0.35) > rgba(234, 218, 82, 0.35) > rgba(3, 192, 60, 0.35) > rgba(87, 154, 190, 0.35) > rgba(151, 110, 215, 0.35)",
+  // "blockman.n33A01B2FromDepth0ToInwardForAllBackgrounds": "90,0,0,3; none",
+  // "blockman.n33A05B1FromFocusToInwardForAllBorders": "100,0,0,0; rgba(255, 165, 0, 0.8)",
+  // "blockman.n34A01BorderThicknessOfNonFocusedBlock": 2,
+  // "blockman.n36A01MaxCharCountInAnyLine": 500
+
+  /* ------------------------- highlight-matching-tag ------------------------- */
+  // "highlight-matching-tag.highlightFromContent": true, // 是否高亮内容中的标签。
+  // "highlight-matching-tag.highlightSelfClosing": true, // 是否高亮自闭标签。
+  // "highlight-matching-tag.styles": {
+  //   "opening": {
+  //     "full": {
+  //       "highlight": "rgba(0, 147, 233, .75)"
+  //     }
+  //   }
+  // },
+
+  /* ------------------------- material-icon-theme ------------------------ */
+  "material-icon-theme.folders.associations": {
+    "global-components": "Global",
+    "node": "Node",
+    "about": "Command",
+    "intro": "Command",
+    "file": "Public",
+    "github": "GitHub",
+    "composables": "Include",
+    "service-worker": "config",
+    "store": "Vuex-store",
+    "demo": "Examples",
+    "basic": "Helper",
+    "vuex": "Vuex-store",
+    "module": "plugin",
+    "router": "Routes",
+    ".vuepress": "vue",
+    "vuepress": "vue",
+    "node-js": "Node",
+    "react": "React-components",
+    "workflows": "Ci",
+    "guide": "content",
+    "git": "Git",
+    "mysql": "DataBase",
+    "software": "App",
+    "tool": "Tools",
+    "vscode": "VSCode",
+    "en": "I18n",
+    "zh": "I18n",
+    "types": "typescript"
+  },
+
+  /* ----------------------------------- 其他 ----------------------------------- */
+  "explorer.fileNesting.enabled": true,
+  "explorer.fileNesting.expand": false,
+  "explorer.fileNesting.patterns": {
+    "tsconfig.json": "tsconfig.*.json, env.d.ts, typed-router.d.ts",
+    "vite.config.*": "jsconfig*, vitest.config.*, cypress.config.*, playwright.config.*",
+    "package.json": "package-lock.json, pnpm*, .yarnrc*, yarn*, .eslint*, eslint*, .oxlint*, oxlint*, .oxfmt*, .prettier*, prettier*, .editorconfig"
+  },
+  "explorer.confirmDelete": false,
+  "explorer.confirmDragAndDrop": false,
+  "explorer.copyRelativePathSeparator": "/",
+  "explorer.incrementalNaming": "smart", // 选择在粘贴同名文件(夹)时要使用的重命名方式。
+  "extensions.ignoreRecommendations": true, // 在差异编辑器中忽略空格。
+  "problems.showCurrentInStatus": true, // 启用后，状态栏中将显示当前问题。
+  "diffEditor.maxComputationTime": 0,
+  "diffEditor.experimental.showMoves": true,
+  "tailwindCSS.experimental.configFile": null,
+  "tailwindCSS.includeLanguages": {
+    "html": "html",
+    "javascript": "javascript",
+    "css": "css"
+  },
+  "update.enableWindowsBackgroundUpdates": false,
+  "update.showReleaseNotes": false,
+  "cursor.rpcFileLogger.enabled": true,
+  "cursor.composer.queueMessageDefaultBehavior": "queue",
+  "cursor.cpp.enablePartialAccepts": true,
+  "cursor.composer.shouldChimeAfterChatFinishes": true,
+  "claudeCode.preferredLocation": "panel",
+  "Codegeex.License": "",
+  "Codegeex.Chat.LanguagePreference": "中文",
+  "Codegeex.Comment.LanguagePreference": "中文",
+  "Codegeex.SidebarUI.LanguagePreference": "中文",
+  "Codegeex.OnlyKeyControl": true,
+  "Codegeex.CommitMessage.LanguagePreference": "中文",
+  "codegeex.codeLens.functionQuickOptions": {
+    "ghostComment": true,
+    "fixBug": false,
+    "generateUnitTest": false,
+    "reviewCode": false,
+    "codeOptimization": true,
+    "addDocString": false,
+    "addExceptionHandling": false,
+    "printLogForDebugging": false,
+    "improveRunningEfficiency": false,
+    "renameSymbols": true,
+    "newFileForDebugging": false,
+    "tryANewApproach": true
+  },
+  "Codegeex.EnableExtension": true,
+  "Codegeex.RepoIndex": true,
+  "Codegeex.Privacy": false,
+  "Codegeex.CommitMessageStyle": "ConventionalCommits",
+  "Codegeex.CompletionModel": "CodeGeeX Lite",
+  // antfu 独有其他配置
+  "debug.onTaskErrors": "debugAnyway",
+
+  /* -------------------------------- leetcode -------------------------------- */
+  // "leetcode.workspaceFolder": "/Users/another/.leetcode", // Mac Developer
+  // "leetcode.endpoint": "leetcode-cn",
+  // "leetcode.workspaceFolder": "C:\\Users\\ccuser\\.leetcode",
+  // "leetcode.hint.setDefaultLanguage": false,
+  // "leetcode.defaultLanguage": "javascript",
+  // "leetcode.hint.commandShortcut": false,
+  // "leetcode.hint.commentDescription": false,
+  // "leetcode.hint.configWebviewMarkdown": false,
+
+  /* ----------------------------- Markdown Image ----------------------------- */
+  // "markdown-image.base.fileNameFormat": "${timestamp}",
+  // "markdown-image.base.altFormat": "${rand,500}",
+  // "markdown-image.base.uploadMethod": "S3",
+  // "markdown-image.s3.bucketName": "temporaryx",
+  // "markdown-image.s3.accessKeyId": "<YOUR_ACCESS_KEY_ID>",
+  // "markdown-image.s3.endpoint": "https://oss-cn-hongkong.aliyuncs.com",
+  // "markdown-image.s3.region": "oss-cn-hongkong",
+  // "markdown-image.s3.secretAccessKey": "<YOUR_ACCESS_KEY_SECRET>",
+  // "markdown-image.local.path": "./attachments",
+
+  // 代理配置
+  // "cursor.composer.backspaceRemoveContext": false,
+  // "cursor.composer.shouldAllowCustomModes": true,
+  // "cursor.general.disableHttp2": true,
+  // "http.proxy": "http://127.0.0.1:7890",
+  // "http.proxyStrictSSL": false,
+  // "http.proxySupport": "on"
+  // "update.releaseTrack": "prerelease",
+}

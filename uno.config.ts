@@ -1,15 +1,56 @@
-import { defineConfig } from 'unocss';
+import {
+  defineConfig,
+  presetAttributify,
+  presetIcons,
+  presetTypography,
+  presetWebFonts,
+  presetWind4,
+  transformerDirectives,
+  transformerVariantGroup
+} from 'unocss'
 
 export default defineConfig({
-  // ...UnoCSS options
-  // 一些实用的自定义组合
-  shortcuts: {
-    'm-0-auto': 'm-0 ma', // margin: 0 auto
-    'wh-full': 'w-full h-full', // width: 100%, height: 100%
-    'flex-center': 'flex justify-center items-center', // flex布局居中
-    'flex-x-center': 'flex justify-center', // flex布局：主轴居中
-    'flex-y-center': 'flex items-center', // flex布局：交叉轴居中
-    'text-overflow': 'overflow-hidden whitespace-nowrap text-ellipsis', // 文本溢出显示省略号
-    'text-break': 'whitespace-normal break-all break-words', // 文本溢出换行
+  shortcuts: [
+    {
+      'flex-center': 'flex items-center justify-center',
+      'flex-col-center': 'flex flex-col items-center justify-center',
+    },
+  ],
+  presets: [
+    presetWind4({
+      preflights: {
+        reset: true,
+      },
+    }),
+    presetAttributify(),
+    presetIcons({
+      scale: 1.2,
+      warn: true,
+      extraProperties: {
+        'display': 'inline-block',
+        'vertical-align': 'middle',
+      },
+    }),
+    presetTypography(),
+    presetWebFonts({
+      fonts: {
+        sans: 'Inter:400,600,800',
+        mono: 'DM Mono',
+      },
+    }),
+  ],
+  transformers: [
+    transformerDirectives(),
+    transformerVariantGroup(),
+  ],
+  theme: {
+    colors: {
+      primary: '#409eff',
+      success: '#67c23a',
+      warning: '#e6a23c',
+      danger: '#f56c6c',
+      error: '#f56c6c',
+      info: '#909399',
+    },
   },
-});
+})

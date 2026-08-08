@@ -1,26 +1,16 @@
-// 引入ElementPlus所有图标
-import * as ElementPlusIconsVue from '@element-plus/icons-vue';
-import { ElMessage } from 'element-plus';
-import { createApp } from 'vue';
-import ElementPlusX from 'vue-element-plus-x';
-import App from './App.vue';
-import router from './routers';
-import store from './stores';
-import './styles/index.scss';
-import 'virtual:uno.css';
-import 'element-plus/dist/index.css';
-// SVG插件配置
-import 'virtual:svg-icons-register';
+import { createApp } from 'vue'
+import { createPinia } from 'pinia'
+import ElementPlus from 'element-plus'
+import 'element-plus/dist/index.css'
+import 'virtual:uno.css'
 
-const app = createApp(App);
+import App from './App.vue'
+import router from './router'
 
-app.use(router);
-app.use(ElMessage);
-app.use(ElementPlusX);
-// 注册ElementPlus所有图标
-for (const [key, component] of Object.entries(ElementPlusIconsVue)) {
-  app.component(key, component);
-}
-app.use(store);
+const app = createApp(App)
 
-app.mount('#app');
+app.use(createPinia())
+app.use(router)
+app.use(ElementPlus)
+
+app.mount('#app')
