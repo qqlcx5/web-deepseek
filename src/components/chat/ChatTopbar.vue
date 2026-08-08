@@ -1,10 +1,30 @@
 <script setup lang="ts">
+import { ref, nextTick } from 'vue'
 import { useChatStore } from '@/stores/chat'
 import { useTheme } from '@/composables/useTheme'
 import { Icon } from '@iconify/vue'
 
 const store = useChatStore()
 const { isDark, toggleTheme } = useTheme()
+
+const renaming = ref(false)
+const renameInput = ref<HTMLInputElement | null>(null)
+const renameValue = ref('')
+
+function startRename() {
+  if (!store.currentChat) return
+  renameValue.value = store.currentChat.name
+  renaming.value = true
+  nextTick(() => renameInput.value?.focus())
+}
+
+function confirmRename() {
+  if (renaming.value && renameValue.value.trim() && store.activeChatId) {
+    store.renameTopic(store.activeChatId, renameValue.value.trim())
+    store.showToast('对话已重命名')
+  }
+  renaming.value = false
+}
 </script>
 
 <template>
@@ -23,13 +43,22 @@ const { isDark, toggleTheme } = useTheme()
 
     <div class="title-block">
       <div class="title-line">
-        <h1 class="chat-heading">{{ store.currentChat?.title || 'DeepSeek Chat' }}</h1>
+        <h1 v-if="!renaming" class="chat-heading" @dblclick="startRename">{{ store.currentChat?.name || 'Orbit Chat' }}</h1>
+        <input
+          v-else
+          ref="renameInput"
+          v-model="renameValue"
+          class="rename-input"
+          @keydown.enter="confirmRename"
+          @keydown.escape="renaming = false"
+          @blur="confirmRename"
+        />
         <button
-          v-if="store.currentChat"
+          v-if="store.currentChat && !renaming"
           class="icon-btn tooltip desktop-only"
           data-tip="重命名对话"
           style="width:26px;height:26px;flex-basis:26px"
-          @click="store.showToast('标题编辑状态已开启')"
+          @click="startRename"
         >
           <Icon icon="tabler:pencil" width="13" />
         </button>
@@ -98,6 +127,7 @@ const { isDark, toggleTheme } = useTheme()
 .chat-heading { overflow: hidden; margin: 0; font-size: 14px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
 .save-state { display: flex; align-items: center; gap: 4px; margin-top: 3px; color: var(--faint); font-size: 10px; }
 .save-state :deep(svg) { width: 12px; height: 12px; color: var(--success); }
+.rename-input { height: 28px; padding: 0 6px; color: var(--text); background: var(--surface); border: 1px solid var(--brand); border-radius: 4px; font-size: 14px; font-weight: 700; outline: 0; max-width: 300px; }
 .model-button {
   display: flex; height: 34px; max-width: 180px; align-items: center; gap: 7px;
   padding: 0 10px; color: var(--text-secondary); background: var(--surface);

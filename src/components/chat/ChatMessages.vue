@@ -3,7 +3,7 @@ import { ref, watch, nextTick } from 'vue'
 import { useChatStore } from '@/stores/chat'
 import { Icon } from '@iconify/vue'
 import { MarkdownRenderer } from 'x-markdown-vue'
-import { Welcome } from 'vue-element-plus-x'
+import { Welcome, Thinking } from 'vue-element-plus-x'
 import 'x-markdown-vue/style'
 
 const store = useChatStore()
@@ -78,11 +78,19 @@ defineExpose({ scrollToBottom })
                 <span class="message-time">{{ message.time }}</span>
               </div>
 
-              <div v-if="message.loading" class="typing">
+              <!-- Reasoning content (Thinking component) -->
+              <Thinking
+                v-if="message.reasoningContent"
+                :content="message.reasoningContent"
+                :status="message.loading ? 'thinking' : 'end'"
+                :auto-collapse="true"
+              />
+
+              <div v-if="message.loading && !message.content" class="typing">
                 <i /><i /><i />
               </div>
 
-              <div v-else class="markdown">
+              <div v-if="message.content" class="markdown">
                 <MarkdownRenderer :markdown="message.content" />
               </div>
 

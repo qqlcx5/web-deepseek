@@ -54,6 +54,12 @@ defineExpose({ composer, resizeComposer })
 
 <template>
   <div class="composer-wrap">
+    <!-- Offline banner -->
+    <div v-if="!store.online" class="offline-banner">
+      <Icon icon="tabler:wifi-off" width="14" />
+      <span>网络已断开。消息将保存在本地，网络恢复后可重试。</span>
+    </div>
+
     <div class="composer">
       <!-- Reply context -->
       <div v-if="store.replyingTo" class="reply-context">
@@ -113,6 +119,14 @@ defineExpose({ composer, resizeComposer })
   position: relative; z-index: 8; flex: 0 0 auto;
   padding: 10px 18px max(10px, env(safe-area-inset-bottom));
   background: linear-gradient(to bottom, transparent, var(--surface) 16px);
+}
+.offline-banner {
+  width: min(100%, 820px); margin: 0 auto 6px;
+  display: flex; align-items: center; gap: 6px;
+  padding: 6px 10px; color: var(--warning-text, #92400e);
+  background: color-mix(in srgb, var(--warning, #f59e0b) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--warning, #f59e0b) 25%, transparent);
+  border-radius: 6px; font-size: 11px;
 }
 .composer {
   width: min(100%, 820px); margin: 0 auto; background: var(--surface);

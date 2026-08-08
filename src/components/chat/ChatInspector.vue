@@ -21,6 +21,26 @@ const meterColor = computed(() => {
   if (pct < 85) return 'var(--warning)'
   return 'var(--danger)'
 })
+
+// Session stats
+const inputTokens = computed(() =>
+  store.messages
+    .filter(m => m.role === 'user')
+    .reduce((sum, m) => sum + estimateTokens(m.content), 0),
+)
+const outputTokens = computed(() =>
+  store.messages
+    .filter(m => m.role === 'assistant')
+    .reduce((sum, m) => sum + estimateTokens(m.content) + estimateTokens(m.reasoningContent ?? ''), 0),
+)
+const estimatedCost = computed(() => {
+  const pricing = store.selectedModel?.pricing
+  if (!pricing) return '—'
+  const cost = (inputTokens.value / 1_000_000) * pricing.input + (outputTokens.value / 1_000_000) * pricing.output
+  return cost < 0.01 ? '<$0.01' : `$${cost.toFixed(2)}`
+})
+const messageCount = computed(() => store.messages.length)
+const assistantCount = computed(() => store.messages.filter(m => m.role === 'assistant').length)
 </script>
 
 <template>
@@ -94,6 +114,33 @@ const meterColor = computed(() => {
           </div>
         </div>
       </section>
+
+      <!-- Session stats -->
+      <section class="panel-section">
+        <div class="panel-heading">会话消耗</div>
+        <div class="stats-grid">
+          <div class="stat-item">
+            <span class="stat-label">消息总数</span>
+            <span class="stat-value">{{ messageCount }}</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">AI 回复</span>
+            <span class="stat-value">{{ assistantCount }}</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">输入 Token</span>
+            <span class="stat-value">~{{ inputTokens }}</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">输出 Token</span>
+            <span class="stat-value">~{{ outputTokens }}</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">预计费用</span>
+            <span class="stat-value">{{ estimatedCost }}</span>
+          </div>
+        </div>
+      </section>
     </div>
   </aside>
 </template>
@@ -131,6 +178,10 @@ const meterColor = computed(() => {
 .model-info-name { font-size: 11px; font-weight: 650; color: var(--text); }
 .model-info-desc { margin-top: 2px; color: var(--muted); font-size: 9px; line-height: 1.4; }
 .model-info-meta { margin-top: 4px; color: var(--faint); font-size: 9px; }
+.stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.stat-item { display: flex; flex-direction: column; gap: 3px; padding: 8px; background: var(--surface); border: 1px solid var(--line); border-radius: 5px; }
+.stat-label { color: var(--faint); font-size: 9px; }
+.stat-value { color: var(--text); font-size: 14px; font-weight: 650; }
 
 .icon-btn { display: inline-flex; width: 34px; height: 34px; flex: 0 0 34px; align-items: center; justify-content: center; border-radius: 6px; color: var(--muted); background: transparent; border: 0; cursor: pointer; transition: background 140ms, color 140ms; }
 .icon-btn:hover { color: var(--text); background: var(--surface-3); }

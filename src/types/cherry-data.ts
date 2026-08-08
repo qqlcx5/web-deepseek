@@ -1,56 +1,66 @@
-// ─── Cherry Studio Raw Data Types ─────────────────────────────────────────────
+// ─── Cherry Studio Raw Data Types (Real data.json Structure) ──────────────────
 // These types describe the shape of data exported by Cherry Studio.
-// They are used by the import / export pipeline to parse and map
-// Cherry Studio data into Orbit Chat's own `AppData` structure.
+// Verified against real data.json with: localStorage + indexedDB structure.
 
 /**
  * The top-level shape of a Cherry Studio data export file.
  *
- * Cherry Studio exports a single JSON object containing multiple
- * "persist" sections, each keyed by a domain name.
+ * Real structure:
+ * { time: int, version: 5, localStorage: { 'persist:cherry-studio': {...} }, indexedDB: {...} }
  */
 export interface CherryData {
-  /** Schema version from Cherry Studio. */
-  version?: string
-  /** Persisted state sections. */
-  persist?: CherryPersist
-  /** Top-level keys that are not part of `persist`. */
+  time?: number
+  version?: number
+  localStorage: CherryLocalStorage
+  indexedDB: CherryIndexedDB
+}
+
+/**
+ * The localStorage wrapper inside a Cherry Studio export.
+ */
+export interface CherryLocalStorage {
+  'persist:cherry-studio': CherryPersist
   [key: string]: unknown
 }
 
 /**
- * The persist block inside a Cherry Studio export.
+ * The persist block inside localStorage['persist:cherry-studio'].
  */
 export interface CherryPersist {
-  assistants?: CherryAssistantsData
-  llm?: CherryLLMData
+  llm: CherryLLMData
+  assistants: CherryAssistantsData
+  settings: Record<string, unknown>
   [key: string]: unknown
 }
 
 /**
- * The assistants section of Cherry Studio data.
- */
-export interface CherryAssistantsData {
-  /** Topic records keyed by topic id. */
-  topics?: Record<string, CherryTopicRecord>
-  /** Assistant definitions keyed by assistant id. */
-  assistants?: Record<string, CherryAssistant>
-  /** Other fields Cherry Studio may include. */
-  [key: string]: unknown
-}
-
-/**
- * The LLM section of Cherry Studio data (providers & models).
+ * The LLM section — providers array + model references.
  */
 export interface CherryLLMData {
-  /** Provider configurations keyed by provider id. */
-  providers?: Record<string, CherryProvider>
-  /** Other fields. */
-  [key: string]: unknown
+  /** Array of Provider objects (61 in real data). */
+  providers: CherryProvider[]
+  defaultModel?: CherryModelRef
+  topicNamingModel?: CherryModelRef
+  translateModel?: CherryModelRef
+  quickAssistantModel?: CherryModelRef
+  quickModel?: CherryModelRef
+  settings?: Record<string, unknown>
+}
+
+/**
+ * A model reference ({id, provider, name, group}).
+ */
+export interface CherryModelRef {
+  id: string
+  provider: string
+  name: string
+  group?: string
+  supported_text_delta?: boolean
 }
 
 /**
  * A provider configuration in Cherry Studio.
+ * In real data, providers is an ARRAY (not a Record).
  */
 export interface CherryProvider {
   id: string
@@ -59,14 +69,30 @@ export interface CherryProvider {
   apiHost?: string
   apiURL?: string
   apiVersion?: string
-  models?: Array<{
-    id: string
-    name: string
-    [key: string]: unknown
-  }>
+  models?: CherryModel[]
   isSystem?: boolean
   enabled?: boolean
   [key: string]: unknown
+}
+
+/**
+ * A model in Cherry Studio's provider.
+ */
+export interface CherryModel {
+  id: string
+  name: string
+  provider: string
+  group?: string
+  supported_text_delta?: boolean
+  [key: string]: unknown
+}
+
+/**
+ * The assistants section of Cherry Studio data.
+ */
+export interface CherryAssistantsData {
+  defaultAssistant: CherryAssistant
+  assistants: CherryAssistant[]
 }
 
 /**
@@ -75,96 +101,104 @@ export interface CherryProvider {
 export interface CherryAssistant {
   id: string
   name: string
+  emoji?: string
   prompt?: string
   description?: string
-  temperature?: number
-  topP?: number
-  maxTokens?: number
-  model?: string
-  avatar?: string
-  emoji?: string
-  tags?: string[]
-  groupId?: string
-  isDefault?: boolean
-  enabled?: boolean
+  topics?: unknown[]
+  messages?: unknown[]
+  type?: string
+  regularPhrases?: unknown[]
+  settings?: Record<string, unknown>
+  model?: CherryModelRef
+  defaultModel?: CherryModelRef
+  enableWebSearch?: boolean
+  mcpServers?: unknown[]
+  knowledgeRecognition?: unknown
   [key: string]: unknown
 }
 
 /**
- * A topic (conversation thread) record in Cherry Studio.
+ * A topic in Cherry Studio's indexedDB.
  */
-export interface CherryTopicRecord {
+export interface CherryTopic {
   id: string
-  assistantId?: string
-  name?: string
-  messages?: CherryMessage[]
-  prompt?: string
-  temperature?: number
-  topP?: number
-  maxTokens?: number
-  model?: string
-  isNameManuallyEdited?: boolean
-  pinned?: boolean
-  favorite?: boolean
-  archived?: boolean
-  tags?: string[]
-  createdAt?: string
-  updatedAt?: string
+  messages: CherryMessage[]
   [key: string]: unknown
 }
 
 /**
  * A message in Cherry Studio's format.
+ * Note: content is often empty string — actual content lives in message_blocks.
  */
 export interface CherryMessage {
   id: string
   role: string
-  content: string
-  reasoningContent?: string
-  model?: string
-  tokens?: {
-    input?: number
-    output?: number
-  }
-  blocks?: CherryMessageBlock[]
-  askId?: string
-  branchIndex?: number
-  parentBranchIndex?: number
-  createdAt?: string
+  topicId?: string
+  assistantId?: string
+  createdAt?: number
   status?: string
+  blocks: string[]
+  modelId?: string
+  model?: CherryModelRef
+  mentions?: unknown[]
+  usage?: {
+    prompt_tokens?: number
+    completion_tokens?: number
+    total_tokens?: number
+  }
+  content?: string
   [key: string]: unknown
 }
 
 /**
- * A structured content block in Cherry Studio's message format.
+ * A message block in Cherry Studio's indexedDB.
+ * type ∈ 'main_text' | 'thinking' | 'error' | 'citation' | 'tool' | 'unknown'
  */
 export interface CherryMessageBlock {
+  id: string
+  messageId: string
   type: string
+  createdAt: number
+  status: string
   content: string
-  mimeType?: string
-  toolName?: string
-  toolArgs?: string
-  toolResult?: string
+  citationReferences?: unknown[]
   [key: string]: unknown
+}
+
+/**
+ * The indexedDB section of a Cherry Studio export.
+ */
+export interface CherryIndexedDB {
+  topics: CherryTopic[]
+  message_blocks: CherryMessageBlock[]
+  settings?: CherrySettingEntry[]
+  files?: unknown[]
+  knowledge_notes?: unknown[]
+  translate_history?: unknown[]
+  quick_phrases?: unknown[]
+  translate_languages?: unknown[]
+  notes_tree?: unknown[]
+  [key: string]: unknown
+}
+
+/**
+ * A setting entry in indexedDB.
+ */
+export interface CherrySettingEntry {
+  id: string
+  value: unknown
 }
 
 /**
  * The result of parsing a Cherry Studio export file.
- * Contains the raw data plus metadata about the parse.
  */
 export interface ParsedCherryData {
-  /** Whether the parse was successful. */
   ok: boolean
-  /** The parsed Cherry data, if successful. */
   data?: CherryData
-  /** Error message if parsing failed. */
   error?: string
-  /** Number of providers found. */
-  providerCount?: number
-  /** Number of assistants found. */
-  assistantCount?: number
-  /** Number of topics found. */
-  topicCount?: number
-  /** Number of messages found (across all topics). */
-  messageCount?: number
+  providerCount: number
+  assistantCount: number
+  topicCount: number
+  messageCount: number
+  blockCount: number
 }

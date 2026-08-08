@@ -12,6 +12,7 @@ export interface ChatRequestParams {
   signal?: AbortSignal
   providerId?: string
   apiHost?: string
+  apiKey?: string
 }
 
 /**
@@ -31,6 +32,7 @@ export const chatApi = {
       signal,
       providerId,
       apiHost,
+      apiKey,
     } = params
 
     const body = {
@@ -41,6 +43,33 @@ export const chatApi = {
       ...(maxTokens !== undefined && { max_tokens: maxTokens }),
       ...(providerId && { provider_id: providerId }),
       ...(apiHost && { api_host: apiHost }),
+    }
+
+    // If apiHost + apiKey are provided, use direct fetch instead of the default http instance
+    if (apiHost && apiKey) {
+      const url = apiHost.endsWith('/')
+        ? `${apiHost}chat/completions`
+        : `${apiHost}/chat/completions`
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify(body),
+        ...(signal && { signal }),
+      })
+
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => response.statusText)
+        throw new Error(`Stream failed: ${response.status} ${errorText}`)
+      }
+
+      if (!response.body) {
+        throw new Error('No response body for stream')
+      }
+
+      return response.body as ReadableStream<Uint8Array>
     }
 
     const request = http.post('/chat/completions', body, {
@@ -76,6 +105,7 @@ export const chatApi = {
       signal,
       providerId,
       apiHost,
+      apiKey,
     } = params
 
     const body = {
@@ -86,6 +116,29 @@ export const chatApi = {
       ...(maxTokens !== undefined && { max_tokens: maxTokens }),
       ...(providerId && { provider_id: providerId }),
       ...(apiHost && { api_host: apiHost }),
+    }
+
+    // If apiHost + apiKey are provided, use direct fetch
+    if (apiHost && apiKey) {
+      const url = apiHost.endsWith('/')
+        ? `${apiHost}chat/completions`
+        : `${apiHost}/chat/completions`
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify(body),
+        ...(signal && { signal }),
+      })
+
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => response.statusText)
+        throw new Error(`Request failed: ${response.status} ${errorText}`)
+      }
+
+      return response.json() as Promise<ChatCompletionResponse>
     }
 
     const request = http.post('/chat/completions', body, {

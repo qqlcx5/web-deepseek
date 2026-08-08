@@ -1,3 +1,3 @@
-// Deprecated — logic merged into src/stores/chat.ts
-// This file is kept empty for backward compatibility.
+// DEPRECATED: This file is no longer used.
+// All chat logic lives in src/stores/chat.ts
 export {}

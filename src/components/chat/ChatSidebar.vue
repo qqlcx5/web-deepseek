@@ -5,6 +5,9 @@ import { Icon } from '@iconify/vue'
 
 const store = useChatStore()
 const fileInput = ref<HTMLInputElement | null>(null)
+const menuOpenId = ref<string | null>(null)
+const renamingId = ref<string | null>(null)
+const renameValue = ref('')
 
 function handleImport(e: Event) {
   const input = e.target as HTMLInputElement
@@ -12,6 +15,46 @@ function handleImport(e: Event) {
     store.importData(input.files[0])
     input.value = ''
   }
+}
+
+function startRename(id: string, currentName: string) {
+  renamingId.value = id
+  renameValue.value = currentName
+  menuOpenId.value = null
+}
+
+function confirmRename() {
+  if (renamingId.value && renameValue.value.trim()) {
+    // Find the topic and rename via appStore
+    const chat = store.chats.find(c => c.id === renamingId.value)
+    if (chat) {
+      // Use the store's currentChat to access appStore.renameTopic
+      // We'll call it through a method we expose on chat store
+      store.renameTopic?.(renamingId.value, renameValue.value.trim())
+    }
+  }
+  renamingId.value = null
+}
+
+function handleDelete(id: string) {
+  store.deleteConversation(id)
+  menuOpenId.value = null
+}
+
+function handlePin(id: string) {
+  // Toggle pin via appStore through chat store
+  store.togglePin?.(id)
+  menuOpenId.value = null
+}
+
+function toggleMenu(id: string, e: Event) {
+  e.stopPropagation()
+  menuOpenId.value = menuOpenId.value === id ? null : id
+}
+
+// Close menu on outside click
+if (typeof document !== 'undefined') {
+  document.addEventListener('click', () => { menuOpenId.value = null })
 }
 </script>
 
@@ -82,15 +125,51 @@ function handleImport(e: Event) {
         class="chat-row"
         :class="{ active: store.activeChatId === chat.id }"
         @click="store.openConversation(chat.id)"
+        @contextmenu.prevent="toggleMenu(chat.id, $event)"
       >
         <Icon
-          :icon="chat.pinned ? 'tabler:pin' : 'tabler:message'"
+          :icon="chat.pinned ? 'tabler:pinned' : 'tabler:message'"
           class="chat-icon"
         />
         <span class="chat-copy">
-          <span class="chat-title">{{ chat.title }}</span>
+          <span v-if="renamingId === chat.id" class="rename-input-wrap" @click.stop>
+            <input
+              v-model="renameValue"
+              class="rename-input"
+              @keydown.enter="confirmRename"
+              @keydown.escape="renamingId = null"
+              @blur="confirmRename"
+              ref="renameInput"
+            />
+          </span>
+          <span v-else class="chat-title">{{ chat.title }}</span>
           <span class="chat-preview">{{ chat.preview }}</span>
         </span>
+        <button
+          v-if="menuOpenId === chat.id"
+          class="chat-menu"
+          @click.stop
+        >
+          <button class="menu-item" @click="handlePin(chat.id)">
+            <Icon icon="tabler:pinned" width="13" />
+            {{ chat.pinned ? '取消置顶' : '置顶' }}
+          </button>
+          <button class="menu-item" @click="startRename(chat.id, chat.title)">
+            <Icon icon="tabler:edit" width="13" />
+            重命名
+          </button>
+          <button class="menu-item danger" @click="handleDelete(chat.id)">
+            <Icon icon="tabler:trash" width="13" />
+            删除
+          </button>
+        </button>
+        <button
+          v-else
+          class="chat-more"
+          @click.stop="toggleMenu(chat.id, $event)"
+        >
+          <Icon icon="tabler:dots-vertical" width="14" />
+        </button>
       </button>
     </div>
 
@@ -170,12 +249,22 @@ function handleImport(e: Event) {
 .workspace-row:hover, .chat-row:hover { background: var(--surface-3); }
 .workspace-dot { width: 8px; height: 8px; border-radius: 2px; }
 .workspace-count { margin-left: auto; color: var(--faint); font-size: 10px; }
-.chat-row { min-height: 48px; padding: 7px 8px; }
+.chat-row { position: relative; min-height: 48px; padding: 7px 8px; }
 .chat-row.active { color: var(--brand); background: var(--brand-soft); }
 .chat-icon { width: 16px; flex: 0 0 16px; color: var(--faint); }
 .chat-copy { min-width: 0; flex: 1; }
 .chat-title { display: block; overflow: hidden; font-size: 12px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
 .chat-preview { display: block; overflow: hidden; margin-top: 3px; color: var(--faint); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.chat-more { display: flex; width: 24px; height: 24px; flex: 0 0 24px; align-items: center; justify-content: center; color: var(--faint); background: transparent; border: 0; border-radius: 4px; cursor: pointer; opacity: 0; transition: opacity 140ms; }
+.chat-row:hover .chat-more { opacity: 1; }
+.chat-more:hover { color: var(--text); background: var(--surface-3); }
+.chat-menu { position: absolute; right: 4px; top: 36px; z-index: 50; min-width: 120px; padding: 4px; background: var(--surface); border: 1px solid var(--line-strong); border-radius: 6px; box-shadow: var(--shadow-md); display: flex; flex-direction: column; gap: 1px; }
+.menu-item { display: flex; width: 100%; align-items: center; gap: 7px; padding: 6px 8px; color: var(--text-secondary); background: transparent; border: 0; border-radius: 4px; font-size: 11px; text-align: left; cursor: pointer; }
+.menu-item:hover { color: var(--text); background: var(--surface-3); }
+.menu-item.danger { color: var(--danger); }
+.menu-item.danger:hover { background: color-mix(in srgb, var(--danger) 10%, transparent); }
+.rename-input-wrap { width: 100%; }
+.rename-input { width: 100%; padding: 2px 4px; color: var(--text); background: var(--surface); border: 1px solid var(--brand); border-radius: 3px; font-size: 12px; outline: 0; }
 .profile {
   display: flex; height: 58px; flex: 0 0 58px; align-items: center; gap: 9px;
   padding: 0 12px; background: var(--surface); border-top: 1px solid var(--line); text-align: left;
