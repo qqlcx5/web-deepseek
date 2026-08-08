@@ -1,8 +1,26 @@
 # Orbit Chat 详细设计文档
-
+明白了。核心原则：基于现有静态页面和 Element-Plus-X 组件来渐进式开发，保留现有 UI 风格和结构，不做推翻重写。
 > 版本: V1.0
 > 基于: orbit-chat-prd.md + data-design.md + chat.html 设计稿
 > 日期: 2026-08-08
+
+---
+
+## 0. 排除声明（Web 端一期不支持）
+
+以下功能明确不在 Web 端一期范围内：
+
+| 排除功能 | 原因 |
+|----------|------|
+| 联网搜索 | 浏览器无法代理模型请求注入搜索结果上下文 |
+| 知识库 RAG | 依赖向量数据库与 Embedding 模型，Web 端无法本地运行 |
+| 图片生成与多模态附件（图片理解） | `/v1/chat/completions` 仅支持纯文本，多模态需额外处理 |
+| MCP 工具调用 | 依赖本地进程与文件系统，浏览器沙箱无法访问 |
+| 语音输入/朗读（ASR/TTS） | 需浏览器 getUserMedia + 专用 TTS 模型，一期不纳入 |
+| 助手预设市场 | 依赖服务端预设库与搜索索引，一期仅支持用户手动创建助手 |
+| 文件附件上传 | Web 端不做本地文件解析注入上下文 |
+
+> 以上功能均保留在类型定义中作为扩展字段（如 `Assistant` 中 `knowledgeBases`、`mcpServers` 预留），但 UI 不做对应入口，网络层不做对应实现。
 
 ---
 
@@ -21,6 +39,9 @@
 11. [类型系统完整定义](#11-类型系统完整定义)
 12. [模块依赖关系](#12-模块依赖关系)
 13. [待确认问题](#13-待确认问题)
+14. [模型服务与设置模块](#14-模型服务与设置模块)
+15. [助手管理模块](#15-助手管理模块)
+16. [全局设置模块](#16-全局设置模块)
 
 ---
 
@@ -1524,13 +1545,14 @@ function onScrollStateChange(state: 'AT_BOTTOM' | 'SCROLLED_UP' | 'HAS_NEW_MESSA
       @cancel="chatStore.stopGeneration()"
       @paste-file="handlePasteFile"
     >
-      <!-- 工具栏插槽 -->
+      <!-- 工具栏插槽：默认 2 项（新对话 / 清除上下文） -->
+      <!-- Web 端一期移除了联网、知识库、附件上传、图片生成、提示词、MCP、引用笔记 -->
       <template #header>
-        <button class="tool-btn" @click="triggerFileInput">
-          <Icon icon="tabler:paperclip" />
+        <button class="tool-btn" @click="chatStore.newTopic()" title="新对话 (⌘N)">
+          <Icon icon="tabler:square-pen" /> 新对话
         </button>
-        <button class="tool-btn" @click="triggerImageInput">
-          <Icon icon="tabler:photo" />
+        <button class="tool-btn" @click="handleClearContext" title="清除上下文">
+          <Icon icon="tabler:eraser" /> 清除上下文
         </button>
         <span class="context-chip" @click="uiStore.inspectorOpen = true">
           上下文 {{ contextPercent }}%
@@ -1544,8 +1566,7 @@ function onScrollStateChange(state: 'AT_BOTTOM' | 'SCROLLED_UP' | 'HAS_NEW_MESSA
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
-import { XSender, Attachments } from 'vue-element-plus-x'
+import { XSender } from 'vue-element-plus-x'
 import { Icon } from '@iconify/vue'
 import { useChatStore } from '@/stores/chat'
 import { useUIStore } from '@/stores/ui'
@@ -2136,6 +2157,14 @@ export interface Assistant {
   isDefault?: boolean
   tags?: string[]
   emoji?: string
+  group?: string
+  stream?: boolean
+  contextManagement?: {
+    enabled: boolean
+    strategy?: 'compress' | 'truncate'
+    maxContextTokens?: number
+  }
+  customParams?: Record<string, unknown>
   createdAt?: string
   updatedAt?: string
 }
