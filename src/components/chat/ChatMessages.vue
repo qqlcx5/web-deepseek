@@ -2,13 +2,11 @@
 import { ref, watch, nextTick } from 'vue'
 import { useChatStore } from '@/stores/chat'
 import { Icon } from '@iconify/vue'
-import XMarkdownVue from 'x-markdown-vue'
+import { MarkdownRenderer } from 'x-markdown-vue'
 import 'x-markdown-vue/style'
 
 const store = useChatStore()
 const messageScroller = ref<HTMLElement | null>(null)
-
-let streamTimer: ReturnType<typeof setInterval> | null = null
 
 function handleScroll() {
   if (!messageScroller.value) return
@@ -25,50 +23,21 @@ function scrollToBottom() {
   })
 }
 
-// Stream simulation when generating
-watch(() => store.generating, (val) => {
-  if (!val) {
-    if (streamTimer) clearInterval(streamTimer)
-    return
-  }
-  const last = store.messages[store.messages.length - 1]
-  if (!last || last.role !== 'assistant') return
+// Scroll to bottom when messages change or generating
+watch(
+  () => store.messages.length,
+  () => {
+    if (store.nearBottom || store.generating) scrollToBottom()
+  },
+)
 
-  const response = `已收到。这个交互原型会把消息提交给 Workers，并通过 ReadableStream 持续读取回复。
-
-### 当前状态
-
-1. 消息已写入本地待发送队列。
-2. 网络可用时立即提交。
-3. 网络中断时保留草稿和附件引用。
-4. 恢复连接后自动重试，并避免重复写入。
-
-生产环境应给每次发送分配幂等键，防止重试产生重复消息。`
-
-  setTimeout(() => {
-    if (!store.generating) return
-    last.loading = false
-    let idx = 0
-    streamTimer = setInterval(() => {
-      if (!store.generating) { clearInterval(streamTimer!); return }
-      idx += 3
-      last.content = response.slice(0, idx)
-      if (store.nearBottom) scrollToBottom()
-      if (idx >= response.length) {
-        clearInterval(streamTimer!)
-        last.content = response
-        store.generating = false
-        store.saving = true
-        setTimeout(() => { store.saving = false }, 700)
-      }
-    }, 18)
-  }, 450)
-})
-
-// Scroll to bottom on mount and on new messages
-watch(() => store.messages.length, () => {
-  if (store.nearBottom || store.generating) scrollToBottom()
-})
+// Watch for content updates during streaming
+watch(
+  () => store.messages.map(m => m.content).join(''),
+  () => {
+    if (store.nearBottom) scrollToBottom()
+  },
+)
 
 nextTick(() => scrollToBottom())
 
@@ -79,7 +48,15 @@ defineExpose({ scrollToBottom })
   <section class="chat-area">
     <div ref="messageScroller" class="messages scroll" @scroll="handleScroll">
       <div class="message-list">
-        <div class="date-divider">今天</div>
+        <div v-if="store.messages.length === 0" class="empty-state">
+          <div class="empty-icon">
+            <Icon icon="tabler:message-dots" width="32" />
+          </div>
+          <div class="empty-title">开始新对话</div>
+          <div class="empty-hint">输入消息或粘贴文件，AI 将为你解答</div>
+        </div>
+
+        <div v-else class="date-divider">今天</div>
 
         <article
           v-for="message in store.messages"
@@ -94,8 +71,8 @@ defineExpose({ scrollToBottom })
             </div>
             <div class="message-content">
               <div class="message-meta">
-                <span class="message-author">Orbit</span>
-                <span class="message-model">{{ message.model }}</span>
+                <span class="message-author">Assistant</span>
+                <span v-if="message.model" class="message-model">{{ message.model }}</span>
                 <span class="message-time">{{ message.time }}</span>
               </div>
 
@@ -104,7 +81,13 @@ defineExpose({ scrollToBottom })
               </div>
 
               <div v-else class="markdown">
-                <XMarkdownVue :content="message.content" />
+                <MarkdownRenderer :markdown="message.content" />
+              </div>
+
+              <!-- Error indicator -->
+              <div v-if="message.error" class="message-error">
+                <Icon icon="tabler:alert-circle" width="14" />
+                {{ message.error }}
               </div>
 
               <!-- Sources -->
@@ -195,13 +178,13 @@ defineExpose({ scrollToBottom })
                 </button>
               </div>
             </div>
-            <div class="avatar">林</div>
+            <div class="avatar">我</div>
           </template>
         </article>
       </div>
     </div>
 
-    <button v-if="!store.nearBottom" class="jump-bottom" @click="scrollToBottom">
+    <button v-if="!store.nearBottom && store.messages.length > 0" class="jump-bottom" @click="scrollToBottom">
       <Icon icon="tabler:arrow-down" />
       回到底部
     </button>
@@ -212,33 +195,59 @@ defineExpose({ scrollToBottom })
 .chat-area { position: relative; min-height: 0; flex: 1; }
 .messages { position: absolute; inset: 0; overflow-y: auto; overscroll-behavior: contain; }
 .message-list { width: min(100%, 820px); margin: 0 auto; padding: 32px 24px 120px; }
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 80px 24px;
+  color: var(--faint);
+}
+.empty-icon { color: var(--line-strong); }
+.empty-title { font-size: 16px; font-weight: 600; color: var(--muted); }
+.empty-hint { font-size: 12px; }
+
 .date-divider { display: flex; align-items: center; gap: 12px; margin: 4px 0 28px; color: var(--faint); font-size: 10px; }
 .date-divider::before, .date-divider::after { height: 1px; flex: 1; background: var(--line); content: ""; }
 .message { display: grid; grid-template-columns: 30px minmax(0, 1fr); gap: 11px; margin-bottom: 28px; }
 .message.user { grid-template-columns: minmax(0, 1fr) 30px; }
-.assistant-avatar { display: flex; width: 30px; height: 30px; align-items: center; justify-content: center; color: var(--brand); background: var(--brand-soft); border: 1px solid #dddcff; border-radius: 7px; }
+.assistant-avatar { display: flex; width: 30px; height: 30px; align-items: center; justify-content: center; color: var(--brand); background: var(--brand-soft); border: 1px solid var(--line-strong); border-radius: 7px; }
 .assistant-avatar :deep(svg) { width: 15px; }
 .message-content { min-width: 0; }
 .message.user .message-content { justify-self: end; max-width: min(82%, 660px); }
 .message-meta { display: flex; align-items: center; gap: 7px; height: 23px; margin-bottom: 3px; font-size: 11px; }
 .message-author { font-weight: 700; }
 .message-model, .message-time { color: var(--faint); font-size: 10px; }
-.user-bubble { padding: 10px 13px; color: #20205c; background: #eeeeff; border: 1px solid #dedcff; border-radius: 8px 2px 8px 8px; font-size: 13px; line-height: 1.65; white-space: pre-wrap; }
+.user-bubble { padding: 10px 13px; color: var(--text); background: var(--brand-soft); border: 1px solid var(--line); border-radius: 8px 2px 8px 8px; font-size: 13px; line-height: 1.65; white-space: pre-wrap; }
 .user-time { margin-top: 5px; color: var(--faint); font-size: 10px; text-align: right; }
-.markdown { color: #344054; font-size: 13px; line-height: 1.75; overflow-wrap: anywhere; }
+.markdown { color: var(--text-secondary); font-size: 13px; line-height: 1.75; overflow-wrap: anywhere; }
 .markdown :deep(p) { margin: 0 0 10px; }
 .markdown :deep(h2), .markdown :deep(h3) { margin: 18px 0 8px; color: var(--text); font-size: 14px; }
 .markdown :deep(ul), .markdown :deep(ol) { margin: 8px 0; padding-left: 21px; }
 .markdown :deep(li) { margin: 4px 0; }
 .markdown :deep(table) { width: 100%; margin: 12px 0; border-collapse: collapse; font-size: 12px; }
 .markdown :deep(th), .markdown :deep(td) { padding: 8px; border: 1px solid var(--line); text-align: left; }
-.markdown :deep(th) { background: var(--surface-2); }
-.markdown :deep(blockquote) { margin: 12px 0; padding: 7px 11px; color: var(--muted); background: var(--surface-2); border-left: 3px solid #b9b6f7; }
-.markdown :deep(code:not(pre code)) { padding: 2px 5px; color: #4740b5; background: #f2f1ff; border-radius: 4px; font-size: 0.9em; }
-.markdown :deep(pre) { position: relative; overflow: auto; margin: 12px 0; padding: 35px 13px 13px; color: #dbe5f1; background: #18212f; border-radius: 7px; font-size: 12px; line-height: 1.6; }
+.markdown :deep(th) { background: var(--surface-3); }
+.markdown :deep(blockquote) { margin: 12px 0; padding: 7px 11px; color: var(--muted); background: var(--surface-2); border-left: 3px solid var(--brand); }
+.markdown :deep(code:not(pre code)) { padding: 2px 5px; color: var(--brand); background: var(--brand-soft); border-radius: 4px; font-size: 0.9em; }
+.markdown :deep(pre) { position: relative; overflow: auto; margin: 12px 0; padding: 35px 13px 13px; color: var(--code-text); background: var(--code-bg); border-radius: 7px; font-size: 12px; line-height: 1.6; }
+
+.message-error {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 8px 10px;
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 8%, transparent);
+  border-radius: 6px;
+  font-size: 11px;
+}
 
 .typing { display: flex; height: 30px; align-items: center; gap: 4px; }
-.typing i { width: 5px; height: 5px; background: #8580dd; border-radius: 50%; animation: typing 1.1s infinite; }
+.typing i { width: 5px; height: 5px; background: var(--brand); border-radius: 50%; animation: typing 1.1s infinite; }
 .typing i:nth-child(2) { animation-delay: 140ms; }
 .typing i:nth-child(3) { animation-delay: 280ms; }
 @keyframes typing { 0%,65%,100% { opacity: 0.35; transform: translateY(0); } 32% { opacity: 1; transform: translateY(-3px); } }
@@ -253,17 +262,17 @@ defineExpose({ scrollToBottom })
 .branch-switcher :deep(svg) { width: 12px; }
 
 .sources { margin-top: 14px; }
-.sources-title { display: flex; align-items: center; gap: 6px; color: #475467; font-size: 11px; font-weight: 650; }
+.sources-title { display: flex; align-items: center; gap: 6px; color: var(--text-secondary); font-size: 11px; font-weight: 650; }
 .source-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; margin-top: 7px; }
-.source { display: flex; min-width: 0; align-items: center; gap: 8px; padding: 8px; color: #344054; background: var(--surface-2); border: 1px solid var(--line); border-radius: 6px; text-decoration: none; }
-.source:hover { border-color: #aaa7ec; }
+.source { display: flex; min-width: 0; align-items: center; gap: 8px; padding: 8px; color: var(--text-secondary); background: var(--surface-2); border: 1px solid var(--line); border-radius: 6px; text-decoration: none; }
+.source:hover { border-color: var(--brand); }
 .source-index { display: flex; width: 21px; height: 21px; flex: 0 0 21px; align-items: center; justify-content: center; color: var(--brand); background: var(--brand-soft); border-radius: 4px; font-size: 10px; font-weight: 700; }
 .source-copy { min-width: 0; }
 .source-name { display: block; overflow: hidden; font-size: 10px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
 .source-domain { display: block; overflow: hidden; margin-top: 2px; color: var(--faint); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
 
-.artifact { display: flex; align-items: center; gap: 10px; margin-top: 13px; padding: 10px; background: #f7fbfa; border: 1px solid #cae7dd; border-radius: 7px; }
-.artifact-icon { display: flex; width: 34px; height: 34px; flex: 0 0 34px; align-items: center; justify-content: center; color: var(--success); background: white; border: 1px solid #cae7dd; border-radius: 6px; }
+.artifact { display: flex; align-items: center; gap: 10px; margin-top: 13px; padding: 10px; background: color-mix(in srgb, var(--success) 5%, var(--surface)); border: 1px solid color-mix(in srgb, var(--success) 20%, var(--line)); border-radius: 7px; }
+.artifact-icon { display: flex; width: 34px; height: 34px; flex: 0 0 34px; align-items: center; justify-content: center; color: var(--success); background: var(--surface); border: 1px solid var(--line); border-radius: 6px; }
 .artifact-copy { min-width: 0; flex: 1; }
 .artifact-name { overflow: hidden; font-size: 11px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
 .artifact-meta { margin-top: 3px; color: var(--faint); font-size: 9px; }
@@ -271,17 +280,17 @@ defineExpose({ scrollToBottom })
 .jump-bottom {
   position: absolute; z-index: 5; bottom: 10px; left: 50%;
   display: flex; height: 32px; align-items: center; gap: 6px; padding: 0 10px;
-  color: #475467; background: white; border: 1px solid var(--line-strong); border-radius: 16px;
-  box-shadow: 0 4px 15px rgba(16, 24, 40, 0.1); font-size: 11px;
+  color: var(--text-secondary); background: var(--surface); border: 1px solid var(--line-strong); border-radius: 16px;
+  box-shadow: var(--shadow-md); font-size: 11px;
   transform: translateX(-50%); cursor: pointer;
 }
 .jump-bottom :deep(svg) { width: 13px; }
 
-.avatar { display: flex; width: 30px; height: 30px; flex: 0 0 30px; align-items: center; justify-content: center; color: #403ba1; background: #dedcff; border-radius: 50%; font-size: 11px; font-weight: 750; }
+.avatar { display: flex; width: 30px; height: 30px; flex: 0 0 30px; align-items: center; justify-content: center; color: var(--brand); background: var(--brand-soft); border-radius: 50%; font-size: 11px; font-weight: 750; }
 
 .secondary {
   display: inline-flex; min-height: 34px; align-items: center; justify-content: center;
-  gap: 7px; padding: 0 11px; color: #344054; background: white;
+  gap: 7px; padding: 0 11px; color: var(--text-secondary); background: var(--surface);
   border: 1px solid var(--line-strong); border-radius: 6px;
   font-size: 12px; font-weight: 600; cursor: pointer;
 }

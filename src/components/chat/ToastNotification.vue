@@ -17,8 +17,8 @@ const store = useChatStore()
 .toast {
   position: fixed; z-index: 100; bottom: 22px; left: 50%; right: auto;
   display: flex; min-height: 34px; align-items: center; gap: 7px;
-  padding: 7px 12px; color: white; background: #1e293b;
-  border-radius: 7px; box-shadow: 0 8px 32px rgba(16, 24, 40, 0.28);
+  padding: 7px 12px; color: #fff; background: var(--text);
+  border-radius: 7px; box-shadow: var(--shadow-lg);
   font-size: 11px; transform: translateX(-50%);
   max-width: calc(100vw - 40px);
 }

@@ -7,18 +7,14 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-vue-project
 node_modules
 .DS_Store
 dist
 dist-ssr
 coverage
 *.local
-.vscode
 
 # Editor directories and files
-# .vscode/*
-!.vscode/extensions.json
 .idea
 *.suo
 *.ntvs*
@@ -29,6 +25,11 @@ coverage
 *.tsbuildinfo
 
 .eslintcache
+
+# Local env files (never commit secrets)
+.env
+.env.*.local
+.env.local
 
 # Cypress
 /cypress/videos/

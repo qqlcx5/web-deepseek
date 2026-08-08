@@ -1,0 +1,52 @@
+import { ref, watch } from 'vue'
+import type { ThemeMode } from '@/types/chat'
+
+const STORAGE_KEY = 'theme-mode'
+
+function getSystemDark(): boolean {
+  return window.matchMedia('(prefers-color-scheme: dark)').matches
+}
+
+function getInitialMode(): ThemeMode {
+  const stored = localStorage.getItem(STORAGE_KEY) as ThemeMode | null
+  if (stored === 'light' || stored === 'dark' || stored === 'auto') return stored
+  return 'light'
+}
+
+const mode = ref<ThemeMode>(getInitialMode())
+const isDark = ref(false)
+
+function applyTheme() {
+  const dark = mode.value === 'dark' || (mode.value === 'auto' && getSystemDark())
+  isDark.value = dark
+  document.documentElement.classList.toggle('dark', dark)
+}
+
+// Listen for system theme changes
+if (typeof window !== 'undefined') {
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+    if (mode.value === 'auto') applyTheme()
+  })
+}
+
+watch(mode, () => {
+  localStorage.setItem(STORAGE_KEY, mode.value)
+  applyTheme()
+}, { immediate: true })
+
+export function useTheme() {
+  function toggleTheme() {
+    mode.value = isDark.value ? 'light' : 'dark'
+  }
+
+  function setTheme(newMode: ThemeMode) {
+    mode.value = newMode
+  }
+
+  return {
+    mode,
+    isDark,
+    toggleTheme,
+    setTheme,
+  }
+}

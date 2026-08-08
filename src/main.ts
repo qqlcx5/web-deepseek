@@ -8,6 +8,11 @@ import './styles/chat.css'
 import App from './App.vue'
 import router from './router'
 
+// Initialize theme before mount
+const storedTheme = localStorage.getItem('theme-mode') || 'light'
+const isDark = storedTheme === 'dark' || (storedTheme === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches)
+if (isDark) document.documentElement.classList.add('dark')
+
 const app = createApp(App)
 
 app.use(createPinia())

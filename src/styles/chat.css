@@ -1,23 +1,80 @@
 :root {
   color-scheme: light;
+
+  /* Brand */
   --brand: #5b56d6;
   --brand-hover: #4a45bd;
   --brand-soft: #efefff;
+
+  /* Text */
   --text: #172033;
+  --text-secondary: #475467;
   --muted: #667085;
   --faint: #98a2b3;
+
+  /* Lines */
   --line: #e5e7eb;
   --line-strong: #d0d5dd;
+
+  /* Surfaces */
   --surface: #ffffff;
   --surface-2: #f8fafc;
   --surface-3: #f2f4f7;
+  --surface-hover: #f0f1f3;
+
+  /* Status */
   --success: #16875d;
   --danger: #d92d20;
   --warning: #b54708;
+
+  /* Layout */
   --sidebar: 276px;
   --inspector: 304px;
   --header: 60px;
   --mobile-nav: 58px;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 3px rgba(16, 24, 40, 0.06);
+  --shadow-md: 0 6px 20px rgba(16, 24, 40, 0.07);
+  --shadow-lg: 0 24px 70px rgba(16, 24, 40, 0.24);
+
+  /* Code block */
+  --code-bg: #18212f;
+  --code-text: #dbe5f1;
+}
+
+:root.dark {
+  color-scheme: dark;
+
+  /* Brand */
+  --brand: #7c7aff;
+  --brand-hover: #6a64f0;
+  --brand-soft: #1e1d3a;
+
+  /* Text */
+  --text: #e4e7ec;
+  --text-secondary: #b8c0d0;
+  --muted: #8a94a6;
+  --faint: #5e6878;
+
+  /* Lines */
+  --line: #2a2e3a;
+  --line-strong: #3a3f4d;
+
+  /* Surfaces */
+  --surface: #15171c;
+  --surface-2: #1a1d24;
+  --surface-3: #22252e;
+  --surface-hover: #2a2e38;
+
+  /* Status */
+  --success: #2eb886;
+  --danger: #ff6b6b;
+  --warning: #e8a040;
+
+  /* Code block */
+  --code-bg: #0f1117;
+  --code-text: #c8d3e8;
 }
 
 * {
@@ -41,6 +98,7 @@ body {
     BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei",
     sans-serif;
   -webkit-font-smoothing: antialiased;
+  transition: background-color 200ms ease, color 200ms ease;
 }
 
 button,
@@ -61,7 +119,7 @@ button:disabled {
 }
 
 .scroll {
-  scrollbar-color: #c8ccd4 transparent;
+  scrollbar-color: var(--line-strong) transparent;
   scrollbar-width: thin;
 }
 
@@ -70,7 +128,7 @@ button:disabled {
 }
 
 .scroll::-webkit-scrollbar-thumb {
-  background: #c8ccd4;
+  background: var(--line-strong);
   border-radius: 9999px;
 }
 

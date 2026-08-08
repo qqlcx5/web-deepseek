@@ -91,7 +91,7 @@ const store = useChatStore()
   min-width: 0;
   flex-direction: column;
   overflow: hidden;
-  background: #fbfcfd;
+  background: var(--surface-2);
   border-right: 1px solid var(--line);
 }
 .brand {
@@ -113,7 +113,7 @@ const store = useChatStore()
   border-radius: 7px;
 }
 .brand-copy { min-width: 0; flex: 1; }
-.brand-name { font-size: 14px; font-weight: 750; }
+.brand-name { font-size: 14px; font-weight: 750; color: var(--text); }
 .brand-state { display: flex; align-items: center; gap: 5px; margin-top: 2px; color: var(--success); font-size: 10px; }
 .status-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
 .sidebar-actions { padding: 7px 10px 10px; }
@@ -121,7 +121,7 @@ const store = useChatStore()
 .search-trigger {
   display: flex; width: 100%; height: 36px; align-items: center; gap: 8px;
   margin-top: 8px; padding: 0 10px; color: var(--muted);
-  background: white; border: 1px solid var(--line); border-radius: 6px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 6px;
   font-size: 12px; text-align: left;
 }
 .shortcut {
@@ -136,23 +136,23 @@ const store = useChatStore()
 }
 .workspace-row, .chat-row {
   display: flex; width: 100%; min-width: 0; align-items: center; gap: 8px;
-  color: #475467; background: transparent; border-radius: 6px; text-align: left;
+  color: var(--text-secondary); background: transparent; border-radius: 6px; text-align: left;
 }
 .workspace-row { height: 34px; padding: 0 8px; font-size: 12px; }
 .workspace-row:hover, .chat-row:hover { background: var(--surface-3); }
 .workspace-dot { width: 8px; height: 8px; border-radius: 2px; }
 .workspace-count { margin-left: auto; color: var(--faint); font-size: 10px; }
 .chat-row { min-height: 48px; padding: 7px 8px; }
-.chat-row.active { color: #35308f; background: var(--brand-soft); }
-.chat-icon { width: 16px; flex: 0 0 16px; color: #98a2b3; }
+.chat-row.active { color: var(--brand); background: var(--brand-soft); }
+.chat-icon { width: 16px; flex: 0 0 16px; color: var(--faint); }
 .chat-copy { min-width: 0; flex: 1; }
-.chat-title { display: block; overflow: hidden; font-size: 12px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.chat-title { display: block; overflow: hidden; font-size: 12px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
 .chat-preview { display: block; overflow: hidden; margin-top: 3px; color: var(--faint); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
 .profile {
   display: flex; height: 58px; flex: 0 0 58px; align-items: center; gap: 9px;
-  padding: 0 12px; background: white; border-top: 1px solid var(--line); text-align: left;
+  padding: 0 12px; background: var(--surface); border-top: 1px solid var(--line); text-align: left;
 }
-.avatar { display: flex; width: 30px; height: 30px; flex: 0 0 30px; align-items: center; justify-content: center; color: #403ba1; background: #dedcff; border-radius: 50%; font-size: 11px; font-weight: 750; }
+.avatar { display: flex; width: 30px; height: 30px; flex: 0 0 30px; align-items: center; justify-content: center; color: var(--brand); background: var(--brand-soft); border-radius: 50%; font-size: 11px; font-weight: 750; }
 .profile-copy { min-width: 0; flex: 1; }
 .profile-name { font-size: 12px; font-weight: 650; }
 .profile-plan { margin-top: 2px; color: var(--faint); font-size: 10px; }
@@ -160,7 +160,7 @@ const store = useChatStore()
 .icon-btn {
   display: inline-flex; width: 34px; height: 34px; flex: 0 0 34px;
   align-items: center; justify-content: center; border-radius: 6px;
-  color: #667085; background: transparent; border: 0; cursor: pointer;
+  color: var(--muted); background: transparent; border: 0; cursor: pointer;
   transition: background 140ms, color 140ms;
 }
 .icon-btn:hover { color: var(--text); background: var(--surface-3); }

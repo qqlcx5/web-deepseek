@@ -125,7 +125,7 @@ document.addEventListener('keydown', handleKeydown)
   position: fixed;
   z-index: 70;
   inset: 0;
-  background: rgba(16, 24, 40, 0.34);
+  background: color-mix(in srgb, var(--text) 34%, transparent);
   backdrop-filter: blur(2px);
 }
 
@@ -141,7 +141,7 @@ document.addEventListener('keydown', handleKeydown)
     z-index: 55;
     inset: 0;
     display: block;
-    background: rgba(16, 24, 40, 0.26);
+    background: color-mix(in srgb, var(--text) 26%, transparent);
   }
 }
 
@@ -164,7 +164,7 @@ document.addEventListener('keydown', handleKeydown)
     height: calc(var(--mobile-nav) + env(safe-area-inset-bottom));
     grid-template-columns: repeat(4, 1fr);
     padding-bottom: env(safe-area-inset-bottom);
-    background: rgba(255, 255, 255, 0.98);
+    background: var(--surface);
     border-top: 1px solid var(--line);
   }
   .mobile-nav button {
