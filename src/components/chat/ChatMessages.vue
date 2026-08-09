@@ -65,11 +65,14 @@ const fontSize = computed(() => `${appStore.settings?.fontSize ?? 14}px`)
 const isPlainMode = computed(() => appStore.settings?.messageStyle === 'plain')
 const showMessageDivider = computed(() => appStore.settings?.showMessageDivider ?? false)
 const codeShowLineNumbers = computed(() => appStore.settings?.codeShowLineNumbers ?? false)
+const codeWrappable = computed(() => appStore.settings?.codeWrappable ?? false)
 
 // Dynamic CSS class for message styling
 const messageClass = computed(() => ({
   'plain-mode': isPlainMode.value,
   'show-divider': showMessageDivider.value,
+  'code-wrappable': codeWrappable.value,
+  'code-line-numbers': codeShowLineNumbers.value,
 }))
 
 // ─── Block helpers ───
@@ -201,11 +204,6 @@ defineExpose({ scrollToBottom })
                     :content="block.content"
                     :status="message.loading ? 'thinking' : 'end'"
                     :auto-collapse="true"
-                    :model-value="message.loading"
-                    max-width="100%"
-                    button-width="100%"
-                    background-color="var(--surface-2)"
-                    color="var(--muted)"
                   />
 
                   <!-- Main text block -->
@@ -250,11 +248,6 @@ defineExpose({ scrollToBottom })
                   :content="message.reasoningContent"
                   :status="message.loading ? 'thinking' : 'end'"
                   :auto-collapse="true"
-                  :model-value="message.loading"
-                  max-width="100%"
-                  button-width="100%"
-                  background-color="var(--surface-2)"
-                  color="var(--muted)"
                 />
 
                 <div v-if="message.loading && !message.content" class="typing">
@@ -440,7 +433,20 @@ defineExpose({ scrollToBottom })
 .message-model, .message-time { color: var(--faint); font-size: 10px; }
 .user-bubble { padding: 10px 13px; color: var(--text); background: var(--brand-soft); border: 1px solid var(--line); border-radius: 8px 2px 8px 8px; font-size: 13px; line-height: 1.65; white-space: pre-wrap; }
 .user-time { margin-top: 5px; color: var(--faint); font-size: 10px; text-align: right; }
-/* markdown 排版样式由 x-markdown-vue 组件自带样式接管 */
+/* ── 以下项目自定义 markdown 样式已注释，使用 x-markdown-vue 组件自带样式 ── */
+/*
+.markdown { color: var(--text-secondary); font-size: 13px; line-height: 1.75; overflow-wrap: anywhere; }
+.markdown :deep(p) { margin: 0 0 10px; }
+.markdown :deep(h2), .markdown :deep(h3) { margin: 18px 0 8px; color: var(--text); font-size: 14px; }
+.markdown :deep(ul), .markdown :deep(ol) { margin: 8px 0; padding-left: 21px; }
+.markdown :deep(li) { margin: 4px 0; }
+.markdown :deep(table) { width: 100%; margin: 12px 0; border-collapse: collapse; font-size: 12px; }
+.markdown :deep(th), .markdown :deep(td) { padding: 8px; border: 1px solid var(--line); text-align: left; }
+.markdown :deep(th) { background: var(--surface-3); }
+.markdown :deep(blockquote) { margin: 12px 0; padding: 7px 11px; color: var(--muted); background: var(--surface-2); border-left: 3px solid var(--brand); }
+.markdown :deep(code:not(pre code)) { padding: 2px 5px; color: var(--brand); background: var(--brand-soft); border-radius: 4px; font-size: 0.9em; }
+*/
+/* .markdown :deep(pre) { position: relative; overflow: auto; margin: 12px 0; padding: 35px 13px 13px; color: var(--code-text); background: var(--code-bg); border-radius: 7px; font-size: 12px; line-height: 1.6; } */
 
 .message-error {
   display: flex;
@@ -494,13 +500,11 @@ defineExpose({ scrollToBottom })
 }
 .jump-bottom :deep(svg) { width: 13px; }
 
-/* mermaid 工具栏样式由 x-markdown-vue 组件自带样式接管 */
-
-/* ── Thinking 组件样式微调 ── */
-.markdown :deep(.elx-thinking) { margin: 0 0 8px; font-size: 12px; }
-.markdown :deep(.elx-thinking__trigger) { height: 28px; padding: 0 10px; border-radius: 6px; border-color: var(--line); background: var(--surface-2); }
-.markdown :deep(.elx-thinking__label) { font-size: 11px; color: var(--muted); }
-.markdown :deep(.elx-thinking__content pre) { font-size: 12px; padding: 8px 10px; border-radius: 6px; border-color: var(--line); line-height: 1.6; }
+/*
+.markdown :deep(.mermaid-config-toolbar) { display: flex; align-items: center; gap: 4px; margin: 8px 0; padding: 4px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 5px; }
+.markdown :deep(.mermaid-config-toolbar button) { display: inline-flex; width: 28px; height: 28px; align-items: center; justify-content: center; color: var(--muted); background: transparent; border: 0; border-radius: 4px; cursor: pointer; }
+.markdown :deep(.mermaid-config-toolbar button:hover) { color: var(--brand); background: var(--brand-soft); }
+*/
 
 .code-viewer-backdrop { position: fixed; z-index: 120; inset: 0; display: flex; justify-content: flex-end; background: color-mix(in srgb, var(--text) 28%, transparent); }
 .code-viewer-drawer { display: flex; width: min(720px, 100vw); max-width: 100%; flex-direction: column; background: var(--surface); border-left: 1px solid var(--line); box-shadow: var(--shadow-lg); }
@@ -602,7 +606,39 @@ defineExpose({ scrollToBottom })
   padding-bottom: 20px;
 }
 
-/* 代码块 wrap/行号由 x-markdown-vue 组件 prop (enableCodeLineNumber) 接管 */
+/* ── 以下代码块自定义样式已注释，使用 x-markdown-vue 组件自带样式 ──
+/* Code block: wrappable (applied via message class) */
+/*
+.message.code-wrappable .markdown :deep(pre) {
+  white-space: pre-wrap !important;
+  word-break: break-word;
+}
+*/
+
+/* Code block: line numbers (applied via message class) */
+/*
+.message.code-line-numbers .markdown :deep(pre) {
+  counter-reset: line;
+  padding-left: 3.5em !important;
+}
+.message.code-line-numbers .markdown :deep(pre > code) {
+  counter-reset: line;
+  display: block;
+}
+.message.code-line-numbers .markdown :deep(pre > code > span) {
+  counter-increment: line;
+}
+.message.code-line-numbers .markdown :deep(pre > code > span::before) {
+  content: counter(line);
+  display: inline-block;
+  width: 2em;
+  margin-right: 1em;
+  margin-left: -3em;
+  color: var(--faint);
+  text-align: right;
+  user-select: none;
+}
+*/
 
 @media (max-width: 760px) {
   .message-list { padding: 22px 13px 125px; }

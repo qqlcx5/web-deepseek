@@ -10,6 +10,18 @@ import type { Provider } from '@/types'
 export { setHttpConfig }
 
 /**
+ * API error with status code and human-readable message.
+ */
+export class ApiError extends Error {
+  status: number
+  constructor(message: string, status: number) {
+    super(message)
+    this.name = 'ApiError'
+    this.status = status
+  }
+}
+
+/**
  * Optional provider override for a single request.
  * When provided, a temporary HTTP instance is created with the provider's apiHost + apiKey.
  */
@@ -34,28 +46,59 @@ export interface ChatRequestParams {
 }
 
 /**
+ * Normalise a Cherry Studio apiHost into a proper OpenAI-compatible base URL.
+ *
+ * Cherry Studio stores apiHost in various formats:
+ *   - Full path:  https://api.example.com/v1/chat/completions#
+ *   - With /v1/:  https://api.example.com/v1/
+ *   - Bare domain: https://api.example.com
+ *   - Non-standard: https://ark...com/api/v3/chat/completions#
+ *
+ * Strategy:
+ *   1. Strip trailing # and whitespace.
+ *   2. If the URL already ends with /chat/completions, extract the base up to that point.
+ *   3. If the URL contains /v1 (or /v2, /v3, etc.) keep everything up to and including it.
+ *   4. Otherwise append /v1.
+ * The final request URL becomes: {normalisedBase}/chat/completions
+ */
+function normalizeApiHost(raw: string): string {
+  let host = raw.trim().replace(/#+$/, '').replace(/\/+$/, '')
+
+  // Already contains /chat/completions — extract the base before it
+  const chatIdx = host.indexOf('/chat/completions')
+  if (chatIdx !== -1) {
+    return host.slice(0, chatIdx)
+  }
+
+  // Contains a version path segment like /v1, /v2, /v3 — keep as-is
+  if (/\/v\d+/.test(host)) {
+    return host
+  }
+
+  // Bare domain — append /v1
+  return host + '/v1'
+}
+
+/**
  * Resolve which HTTP instance to use.
- * If provider override is given, create a temporary instance.
+ * If provider override is given, create a temporary instance with normalised baseURL.
  * Otherwise use the default http instance.
  */
 function resolveHttp(params: ChatRequestParams) {
   if (params.provider?.apiHost) {
     return createHttp(
-      params.provider.apiHost,
+      normalizeApiHost(params.provider.apiHost),
       params.provider.apiKey,
     )
   }
   if (params.apiHost) {
-    // Legacy: use apiHost string directly, keep default apiKey
-    return createHttp(params.apiHost, undefined)
+    return createHttp(normalizeApiHost(params.apiHost), undefined)
   }
   return http
 }
 
 /**
- * Resolve the base path for the chat completions endpoint.
- * Default http instance already has baseURL set, so path is relative.
- * Dynamic instances get an absolute baseURL, so path is also relative (appended to baseURL).
+ * The chat completions endpoint path appended after the normalised base URL.
  */
 const CHAT_PATH = '/chat/completions'
 
@@ -97,14 +140,37 @@ export const chatApi = {
       ...(signal && { signal }),
     })
 
-    const response = await request.response
+    let response: Response
+    try {
+      response = await request.response
+    } catch (fetchError) {
+      // hook-fetch may throw a normalised error — extract the real message
+      const err = fetchError as Error & { status?: number; response?: Response }
+      let detail = err.message
+      if (err.response) {
+        try {
+          const body = await err.response.clone().json()
+          detail = body.msg || body.message || body.error || err.message
+        } catch {
+          try { detail = await err.response.clone().text() } catch {}
+        }
+      }
+      throw new ApiError(detail, err.status ?? 0)
+    }
+
     if (!response.ok) {
-      const errorText = await response.text().catch(() => response.statusText)
-      throw new Error(`Stream failed: ${response.status} ${errorText}`)
+      let detail = response.statusText
+      try {
+        const body = await response.clone().json()
+        detail = body.msg || body.message || body.error || detail
+      } catch {
+        try { detail = await response.clone().text() } catch {}
+      }
+      throw new ApiError(detail, response.status)
     }
 
     if (!response.body) {
-      throw new Error('No response body for stream')
+      throw new ApiError('No response body for stream', response.status)
     }
 
     return response.body as ReadableStream<Uint8Array>
@@ -144,6 +210,20 @@ export const chatApi = {
       ...(signal && { signal }),
     })
 
-    return request.json() as Promise<ChatCompletionResponse>
+    try {
+      return await request.json() as ChatCompletionResponse
+    } catch (fetchError) {
+      const err = fetchError as Error & { status?: number; response?: Response }
+      let detail = err.message
+      if (err.response) {
+        try {
+          const body = await err.response.clone().json()
+          detail = body.msg || body.message || body.error || err.message
+        } catch {
+          try { detail = await err.response.clone().text() } catch {}
+        }
+      }
+      throw new ApiError(detail, err.status ?? 0)
+    }
   },
 }

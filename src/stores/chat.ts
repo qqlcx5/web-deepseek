@@ -3,7 +3,7 @@
 import { computed, ref, watch } from 'vue'
 import { defineStore } from 'pinia'
 import type { Attachment, ChatMessage, ChatStreamDelta, MessageBlock, Model } from '@/types'
-import { chatApi, type ChatRequestParams } from '@/api/chat-api'
+import { chatApi, type ChatRequestParams, ApiError } from '@/api/chat-api'
 import { estimateTokens } from '@/utils/token-counter'
 import { useAppStore } from './app'
 import { useUiStore } from './ui'
@@ -144,11 +144,15 @@ export const useChatStore = defineStore('chat', () => {
   }
 
   function getActiveModel(): Model {
+    // User-selected model takes priority
+    if (selectedModel.value) return selectedModel.value
+
+    // Fall back to assistant's configured model
     const assistantId = currentChat.value?.assistantId ?? activeAssistantId.value ?? appStore.defaultAssistant?.id
     const topicAssistant = appStore.assistants.find(assistant => assistant.id === assistantId) ?? appStore.defaultAssistant
     const assistantModel = topicAssistant?.model
-    const selected = assistantModel ? uiStore.models.find(model => model.id === assistantModel) : selectedModel.value
-    const fallback = selected ?? uiStore.models[0] ?? selectedModel.value
+    const selected = assistantModel ? uiStore.models.find(model => model.id === assistantModel) : null
+    const fallback = selected ?? uiStore.models[0]
     if (!fallback) throw new Error('请先配置并启用一个模型')
     return fallback
   }
@@ -246,6 +250,12 @@ export const useChatStore = defineStore('chat', () => {
           status: 'error',
           createdAt: timestamp(),
         })
+        // Show error toast to the user
+        if (error instanceof ApiError || (error as Error).name === 'ApiError') {
+          uiStore.showToast(`请求失败: ${message}`)
+        } else {
+          uiStore.showToast(`请求出错: ${message}`)
+        }
       }
     } finally {
       assistantMessage.loading = false
