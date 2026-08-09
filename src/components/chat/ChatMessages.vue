@@ -5,12 +5,60 @@ import { useAppStore } from '@/stores/app'
 import { Icon } from '@iconify/vue'
 import { MarkdownRenderer } from 'x-markdown-vue'
 import { Thinking } from 'vue-element-plus-x'
+import { useTheme } from '@/composables/useTheme'
 import 'x-markdown-vue/style'
 import type { ChatMessage, MessageBlock } from '@/types'
 
 const store = useChatStore()
 const appStore = useAppStore()
+const { isDark } = useTheme()
 const messageScroller = ref<HTMLElement | null>(null)
+const codeViewer = ref<{ language: string; code: string } | null>(null)
+
+const mermaidConfig = {
+  showToolbar: true,
+  showFullscreen: true,
+  showZoomIn: true,
+  showZoomOut: true,
+  showReset: true,
+  showDownload: true,
+  toolbarStyle: {},
+  toolbarClass: 'mermaid-config-toolbar',
+}
+
+const viewCodeModalOptions = {
+  mode: 'drawer',
+  customClass: '',
+  dialogOptions: {
+    closeOnClickModal: true,
+    closeOnPressEscape: true,
+  },
+  drawerOptions: {
+    direction: 'rtl',
+    size: 'min(720px, 100vw)',
+  },
+}
+
+const codeBlockActions = [{
+  key: 'view-code',
+  title: '查看代码',
+  icon: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 9l-3 3 3 3M16 9l3 3-3 3M14 5l-4 14"/></svg>',
+  onClick: (props: { code: string; language?: string }) => {
+    codeViewer.value = { language: props.language || 'text', code: props.code }
+  },
+}]
+
+const markdownRendererOptions = computed(() => ({
+  enableShiki: true,
+  enableMermaid: true,
+  isDark: isDark.value,
+  showCodeBlockHeader: true,
+  stickyCodeBlockHeader: true,
+  enableCodeLineNumber: codeShowLineNumbers.value,
+  codeMaxHeight: '560px',
+  codeBlockActions,
+  mermaidConfig,
+}))
 
 // ─── Settings-driven style computeds ───
 const fontSize = computed(() => `${appStore.settings?.fontSize ?? 14}px`)
@@ -57,6 +105,20 @@ function isThinkingExpanded(messageId: string, isLoading: boolean): boolean {
 
 function toggleThinking(messageId: string) {
   thinkingExpanded.value[messageId] = !isThinkingExpanded(messageId, false)
+}
+
+function closeCodeViewer() {
+  codeViewer.value = null
+}
+
+async function copyCodeViewer() {
+  if (!codeViewer.value) return
+  try {
+    await navigator.clipboard.writeText(codeViewer.value.code)
+    store.showToast('代码已复制')
+  } catch {
+    store.showToast('浏览器未授予剪贴板权限')
+  }
 }
 
 function handleScroll() {
@@ -149,7 +211,7 @@ defineExpose({ scrollToBottom })
                     <div v-if="message.loading && !block.content" class="typing">
                       <i /><i /><i />
                     </div>
-                    <MarkdownRenderer v-if="block.content" :markdown="block.content" :enable-shiki="false" />
+                    <MarkdownRenderer v-if="block.content" :markdown="block.content" v-bind="markdownRendererOptions" />
                   </div>
 
                   <!-- Error block -->
@@ -193,7 +255,7 @@ defineExpose({ scrollToBottom })
                 </div>
 
                 <div v-if="message.content" class="markdown" :style="{ fontSize }">
-                  <MarkdownRenderer :markdown="message.content" :enable-shiki="false" />
+                  <MarkdownRenderer :markdown="message.content" v-bind="markdownRendererOptions" />
                 </div>
               </template>
 
@@ -311,6 +373,32 @@ defineExpose({ scrollToBottom })
       <Icon icon="tabler:arrow-down" />
       回到底部
     </button>
+
+    <Teleport to="body">
+      <div v-if="codeViewer" class="code-viewer-backdrop" @click.self="closeCodeViewer">
+        <aside
+          class="code-viewer-drawer"
+          :class="viewCodeModalOptions.customClass"
+          :style="{ width: viewCodeModalOptions.drawerOptions.size }"
+          role="dialog"
+          aria-modal="true"
+          aria-label="查看代码"
+        >
+          <header class="code-viewer-head">
+            <span>{{ codeViewer.language }}</span>
+            <div class="code-viewer-actions">
+              <button class="message-tool tooltip" data-tip="复制代码" @click="copyCodeViewer">
+                <Icon icon="tabler:copy" />
+              </button>
+              <button class="message-tool tooltip" data-tip="关闭" @click="closeCodeViewer">
+                <Icon icon="tabler:x" />
+              </button>
+            </div>
+          </header>
+          <pre class="code-viewer-content"><code>{{ codeViewer.code }}</code></pre>
+        </aside>
+      </div>
+    </Teleport>
   </section>
 </template>
 
@@ -408,6 +496,16 @@ defineExpose({ scrollToBottom })
   transform: translateX(-50%); cursor: pointer;
 }
 .jump-bottom :deep(svg) { width: 13px; }
+
+.markdown :deep(.mermaid-config-toolbar) { display: flex; align-items: center; gap: 4px; margin: 8px 0; padding: 4px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 5px; }
+.markdown :deep(.mermaid-config-toolbar button) { display: inline-flex; width: 28px; height: 28px; align-items: center; justify-content: center; color: var(--muted); background: transparent; border: 0; border-radius: 4px; cursor: pointer; }
+.markdown :deep(.mermaid-config-toolbar button:hover) { color: var(--brand); background: var(--brand-soft); }
+
+.code-viewer-backdrop { position: fixed; z-index: 120; inset: 0; display: flex; justify-content: flex-end; background: color-mix(in srgb, var(--text) 28%, transparent); }
+.code-viewer-drawer { display: flex; width: min(720px, 100vw); max-width: 100%; flex-direction: column; background: var(--surface); border-left: 1px solid var(--line); box-shadow: var(--shadow-lg); }
+.code-viewer-head { display: flex; min-height: var(--header); align-items: center; gap: 8px; padding: 0 12px; color: var(--text-secondary); background: var(--surface-2); border-bottom: 1px solid var(--line); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; }
+.code-viewer-actions { display: flex; margin-left: auto; }
+.code-viewer-content { min-height: 0; flex: 1; overflow: auto; margin: 0; padding: 16px; color: var(--code-text); background: var(--code-bg); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; line-height: 1.65; white-space: pre; }
 
 .avatar { display: flex; width: 30px; height: 30px; flex: 0 0 30px; align-items: center; justify-content: center; color: var(--brand); background: var(--brand-soft); border-radius: 50%; font-size: 11px; font-weight: 750; }
 
