@@ -39,7 +39,7 @@ const groups: SettingGroup[] = [
         { value: 'auto', label: '跟随系统' },
       ] },
       { key: 'fontSize', label: '字体大小', type: 'number', placeholder: '14' },
-      { key: 'sendMessageShortcut', label: '发送消息快捷键', type: 'select', options: [
+      { key: 'sendShortcut', label: '发送消息快捷键', type: 'select', options: [
         { value: 'Enter', label: 'Enter' },
         { value: 'Ctrl+Enter', label: 'Ctrl+Enter' },
         { value: 'Shift+Enter', label: 'Shift+Enter' },
@@ -87,10 +87,6 @@ const groups: SettingGroup[] = [
     items: [
       { key: 'enableTopicNaming', label: '自动命名话题', type: 'toggle' },
       { key: 'pinTopicsToTop', label: '置顶话题', type: 'toggle' },
-      { key: 'topicPosition', label: '话题位置', type: 'select', options: [
-        { value: 'sidebar', label: '侧栏' },
-        { value: 'top', label: '顶部' },
-      ] },
       { key: 'showTopics', label: '显示话题列表', type: 'toggle' },
       { key: 'showTopicTime', label: '显示话题时间', type: 'toggle' },
     ],

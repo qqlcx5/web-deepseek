@@ -2,7 +2,7 @@
 // Lightweight token estimation without external dependencies.
 // Uses a heuristic: Chinese characters ≈ 1.5 chars/token, English ≈ 4 chars/token.
 
-import type { Message } from '@/types'
+import type { ChatMessage } from '@/types'
 
 // ─── estimateTokens ───────────────────────────────────────────────────────────
 
@@ -53,7 +53,7 @@ export function estimateTokens(text: string): number {
  * @param contextLength The model's maximum context length in tokens.
  * @returns A percentage value between 0 and 100.
  */
-export function estimateContextPercent(messages: Message[], contextLength: number): number {
+export function estimateContextPercent(messages: ChatMessage[], contextLength: number): number {
   if (!contextLength || contextLength <= 0) return 0
 
   let totalTokens = 0

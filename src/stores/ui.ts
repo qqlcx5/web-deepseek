@@ -83,6 +83,7 @@ export const useUiStore = defineStore('ui', () => {
           .map(m => ({
             id: m.id,
             name: m.name,
+            providerId: p.id,
             color: '#4d6bfe',
             description: m.description ?? `${p.name} · ${m.name}`,
             tags: [p.name, ...(m.contextLength ? [`${Math.round(m.contextLength / 1000)}K`] : [])],
@@ -103,6 +104,7 @@ export const useUiStore = defineStore('ui', () => {
         selectedModel.value = {
           id: firstModel.id,
           name: firstModel.name,
+          providerId: firstProvider.id,
           color: '#4d6bfe',
           description: firstModel.description ?? `${firstProvider.name} · ${firstModel.name}`,
           tags: [firstProvider.name],
@@ -115,6 +117,7 @@ export const useUiStore = defineStore('ui', () => {
       selectedModel.value = {
         id: 'deepseek-chat',
         name: 'DeepSeek Chat',
+        providerId: '',
         color: '#4d6bfe',
         description: '默认模型',
         tags: [],
@@ -173,6 +176,7 @@ export const useUiStore = defineStore('ui', () => {
     selectedModel.value = {
       id: modelInfo.id,
       name: modelInfo.name,
+      providerId: provider.id,
       color: '#4d6bfe',
       description: modelInfo.description ?? `${provider.name} · ${modelInfo.name}`,
       tags: [provider.name],

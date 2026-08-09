@@ -1,19 +1,13 @@
-// ─── Data Import: Cherry Studio → Orbit Chat ──────────────────────────────────
-// Maps Cherry Studio raw data structures (real data.json) into Orbit Chat's AppData.
-//
-// Real structure:
-// - localStorage['persist:cherry-studio'].llm.providers = ARRAY of Provider
-// - localStorage['persist:cherry-studio'].assistants.assistants = ARRAY of Assistant
-// - localStorage['persist:cherry-studio'].assistants.defaultAssistant = Assistant
-// - localStorage['persist:cherry-studio'].settings = Record<string, unknown>
-// - indexedDB.topics = ARRAY of { id, messages: [...] }
-// - indexedDB.message_blocks = ARRAY of { id, messageId, type, content, ... }
+// ─── Cherry Studio v5 Import ─────────────────────────────────────────────────
+// The exchange format is normalized at this boundary. No Cherry fields enter AppData.
 
 import type {
   AppData,
   Assistant,
   ChatMessage,
   MessageBlock,
+  MessageBlockStatus,
+  MessageBlockType,
   MessageRole,
   MessageStatus,
   ModelInfo,
@@ -26,409 +20,373 @@ import type {
   CherryData,
   CherryMessage,
   CherryMessageBlock,
+  CherryModelRef,
   CherryProvider,
+  CherryTopicRef,
 } from '@/types/cherry-data'
 import { parseDataJSON } from './cherry-parser'
 
-// ─── SCHEMA_VERSION ───────────────────────────────────────────────────────────
+export const APP_DATA_VERSION = 2
 
-const SCHEMA_VERSION = 1
+export interface ImportReport {
+  providerCount: number
+  assistantCount: number
+  topicCount: number
+  messageCount: number
+  blockCount: number
+  warnings: string[]
+}
 
-// ─── Provider mapping ─────────────────────────────────────────────────────────
+export const DEFAULT_SETTINGS: Settings = {
+  language: 'zh-CN',
+  theme: 'light',
+  fontSize: 14,
+  sendShortcut: 'Enter',
+  autoScroll: true,
+  autoCheckUpdate: true,
+  messageStyle: 'bubble',
+  messageFont: 'system',
+  codeShowLineNumbers: false,
+  codeWrappable: true,
+  codeCollapsible: true,
+  foldDisplayMode: 'full',
+  confirmDeleteMessage: true,
+  confirmRegenerateMessage: true,
+  showTokens: true,
+  showMessageDivider: false,
+  showMessageOutline: false,
+  messageNavigation: true,
+  enableTopicNaming: true,
+  pinTopicsToTop: true,
+  showTopics: true,
+  showTopicTime: true,
+  showInputEstimatedTokens: false,
+  pasteLongTextAsFile: false,
+  pasteLongTextThreshold: 1500,
+  renderInputMessageAsMarkdown: false,
+  mathEngine: 'katex',
+  targetLanguage: 'zh-CN',
+}
 
-/**
- * Map Cherry Studio providers (array) to Orbit Chat providers.
- */
-export function mapProviders(
-  cherryProviders: CherryProvider[] | undefined,
-): Provider[] {
-  if (!Array.isArray(cherryProviders)) return []
+function toIso(value: string | number | undefined, fallback: string): string {
+  if (typeof value === 'string') {
+    const date = new Date(value)
+    if (!Number.isNaN(date.getTime())) return date.toISOString()
+  }
+  if (typeof value === 'number') {
+    const date = new Date(value)
+    if (!Number.isNaN(date.getTime())) return date.toISOString()
+  }
+  return fallback
+}
 
-  return cherryProviders.map((cp): Provider => {
-    const apiHost = cp.apiHost ?? cp.apiURL ?? ''
-    const models: ModelInfo[] = (cp.models ?? []).map((m): ModelInfo => ({
-      id: m.id,
-      name: m.name,
-      providerId: cp.id,
-      provider: m.provider,
-      group: m.group,
-      supportedTextDelta: m.supported_text_delta,
+function uniqueById<T extends { id: string }>(items: T[]): T[] {
+  return Array.from(new Map(items.map(item => [item.id, item])).values())
+}
+
+function modelId(model: CherryModelRef | string | undefined): string | undefined {
+  return typeof model === 'string' ? model : model?.id
+}
+
+function modelName(model: CherryModelRef | string | undefined): string | undefined {
+  return typeof model === 'string' ? model : model?.name
+}
+
+export function mapProviders(source: CherryProvider[] | undefined): Provider[] {
+  if (!Array.isArray(source)) return []
+
+  return uniqueById(source.filter(provider => provider.id && provider.name).map((provider): Provider => ({
+    id: provider.id,
+    name: provider.name,
+    apiHost: provider.apiHost ?? provider.apiURL ?? '',
+    apiKey: provider.apiKey,
+    enabled: provider.enabled ?? true,
+    models: uniqueById((provider.models ?? []).filter(model => model.id && model.name).map((model): ModelInfo => ({
+      id: model.id,
+      name: model.name,
+      group: model.group,
+      supportedTextDelta: model.supported_text_delta,
       enabled: true,
-    }))
-
-    return {
-      id: cp.id,
-      name: cp.name,
-      apiHost,
-      apiKey: cp.apiKey,
-      apiPath: undefined,
-      apiVersion: cp.apiVersion,
-      models,
-      enabled: cp.enabled ?? true,
-      isSystem: cp.isSystem,
-    }
-  })
+    }))),
+  })))
 }
 
-// ─── Assistant mapping ────────────────────────────────────────────────────────
-
-/**
- * Map Cherry Studio assistants (array + defaultAssistant) to Orbit Chat assistants.
- */
-export function mapAssistants(
-  cherryAssistants: CherryAssistant[] | undefined,
-  defaultAssistant: CherryAssistant | undefined,
-): Assistant[] {
-  const result: Assistant[] = []
-
-  // Add default assistant first (if not already in array)
-  if (defaultAssistant) {
-    result.push(mapAssistant(defaultAssistant, true))
-  }
-
-  if (Array.isArray(cherryAssistants)) {
-    for (const ca of cherryAssistants) {
-      // Skip if already added as default
-      if (defaultAssistant && ca.id === defaultAssistant.id) continue
-      result.push(mapAssistant(ca, false))
-    }
-  }
-
-  return result
-}
-
-function mapAssistant(ca: CherryAssistant, isDefault: boolean): Assistant {
+function mapAssistant(source: CherryAssistant, isDefault: boolean, now: string): Assistant {
+  const settings = source.settings ?? {}
   return {
-    id: ca.id,
-    name: ca.name,
-    description: ca.description,
-    prompt: ca.prompt ?? '',
-    avatar: undefined,
+    id: source.id,
+    name: source.name || '未命名助手',
+    prompt: source.prompt ?? '',
     enabled: true,
     isDefault,
-    emoji: ca.emoji,
-    stream: true,
-    regularPhrases: ca.regularPhrases,
-    settings: ca.settings,
-    defaultModel: ca.defaultModel as Assistant['defaultModel'],
-    enableWebSearch: ca.enableWebSearch,
-    mcpServers: ca.mcpServers,
-    knowledgeRecognition: ca.knowledgeRecognition,
-    model: ca.model?.id,
+    emoji: source.emoji,
+    description: source.description,
+    model: modelId(source.model) ?? source.defaultModel?.id,
+    temperature: typeof settings.temperature === 'number' ? settings.temperature : undefined,
+    topP: typeof settings.topP === 'number' ? settings.topP : undefined,
+    maxTokens: typeof settings.maxTokens === 'number' ? settings.maxTokens : undefined,
+    enableWebSearch: source.enableWebSearch ?? false,
+    createdAt: now,
+    updatedAt: now,
   }
 }
 
-// ─── Topic & Message mapping ──────────────────────────────────────────────────
+export function mapAssistants(
+  source: CherryAssistant[] | undefined,
+  defaultAssistant: CherryAssistant | undefined,
+): Assistant[] {
+  const now = new Date().toISOString()
+  const defaultId = defaultAssistant?.id
+  const all = [defaultAssistant, ...(source ?? [])]
+    .filter((assistant): assistant is CherryAssistant => Boolean(assistant?.id))
+    .map(assistant => mapAssistant(assistant, assistant.id === defaultId, now))
 
-/**
- * Build a map of messageId → blocks[] from indexedDB.message_blocks.
- */
-function buildBlockMap(
-  messageBlocks: CherryMessageBlock[] | undefined,
-): Map<string, CherryMessageBlock[]> {
-  const map = new Map<string, CherryMessageBlock[]>()
-  if (!Array.isArray(messageBlocks)) return map
+  const assistants = uniqueById(all)
+  if (assistants.length > 0 && !assistants.some(assistant => assistant.isDefault)) {
+    assistants[0]!.isDefault = true
+  }
+  return assistants
+}
 
-  for (const block of messageBlocks) {
-    if (!block.messageId) continue
-    const existing = map.get(block.messageId)
-    if (existing) {
-      existing.push(block)
-    } else {
-      map.set(block.messageId, [block])
+function buildTopicRefIndex(
+  source: CherryAssistant[] | undefined,
+  defaultAssistant: CherryAssistant | undefined,
+): Map<string, CherryTopicRef> {
+  const refs = new Map<string, CherryTopicRef>()
+  for (const assistant of [defaultAssistant, ...(source ?? [])]) {
+    if (!assistant) continue
+    for (const topic of assistant.topics ?? []) {
+      if (topic.id && !refs.has(topic.id)) {
+        refs.set(topic.id, {
+          ...topic,
+          assistantId: topic.assistantId || assistant.id,
+        })
+      }
     }
   }
-  return map
+  return refs
 }
 
-/**
- * Map Cherry Studio topics from indexedDB to Orbit Chat topics.
- *
- * @param cherryTopics Array of { id, messages: [...] }
- * @param blockMap Map of messageId → blocks[]
- * @param defaultAssistantId Fallback assistant id
- */
-export function mapTopics(
-  cherryTopics: { id: string; messages: CherryMessage[] }[] | undefined,
-  blockMap: Map<string, CherryMessageBlock[]>,
-  defaultAssistantId: string,
-): Topic[] {
-  if (!Array.isArray(cherryTopics)) return []
-
-  return cherryTopics.map((ct): Topic => ({
-    id: ct.id,
-    assistantId: defaultAssistantId,
-    name: 'Untitled',
-    messages: (ct.messages ?? []).map((m, idx) => mapMessage(m, ct.id, idx, blockMap)),
-    createdAt: undefined,
-    updatedAt: undefined,
-  }))
+function blockType(type: string): MessageBlockType {
+  return ['main_text', 'thinking', 'error', 'citation', 'tool', 'unknown'].includes(type)
+    ? type as MessageBlockType
+    : 'unknown'
 }
 
-// ─── Message mapping ──────────────────────────────────────────────────────────
-
-/**
- * Map a Cherry Studio message to an Orbit Chat message.
- * Content is assembled from message_blocks (keyed by messageId).
- */
-export function mapMessage(
-  cm: CherryMessage,
-  topicId: string,
-  index: number,
-  blockMap: Map<string, CherryMessageBlock[]>,
-): ChatMessage {
-  const role = normalizeRole(cm.role)
-  const status = normalizeStatus(cm.status)
-
-  // Get blocks for this message
-  const rawBlocks = cm.id ? blockMap.get(String(cm.id)) ?? [] : []
-  const blocks: MessageBlock[] = rawBlocks.map(mapBlock)
-
-  // Assemble content from main_text blocks (Cherry Studio stores content in blocks, not message.content)
-  let content = cm.content ?? ''
-  if (!content && blocks.length > 0) {
-    content = blocks
-      .filter(b => b.type === 'main_text')
-      .map(b => b.content)
-      .join('')
-  }
-
-  // Assemble reasoningContent from thinking blocks
-  let reasoningContent: string | undefined
-  const thinkingBlocks = blocks.filter(b => b.type === 'thinking')
-  if (thinkingBlocks.length > 0) {
-    reasoningContent = thinkingBlocks.map(b => b.content).join('')
-  }
-
-  return {
-    id: String(cm.id ?? `${topicId}-${index}`),
-    topicId,
-    role,
-    content,
-    reasoningContent,
-    model: cm.model?.name ?? cm.modelId,
-    modelId: cm.modelId,
-    usage: cm.usage,
-    mentions: cm.mentions,
-    blocks: blocks.length > 0 ? blocks : undefined,
-    askId: cm.askId as string | undefined,
-    branchIndex: cm.branchIndex as number | undefined,
-    parentBranchIndex: cm.parentBranchIndex as number | undefined,
-    createdAt: cm.createdAt != null ? new Date(cm.createdAt).toISOString() : new Date().toISOString(),
-    status,
-    time: cm.createdAt != null ? new Date(cm.createdAt).toISOString() : new Date().toISOString(),
-    tokens: cm.usage
-      ? {
-          input: cm.usage.prompt_tokens,
-          output: cm.usage.completion_tokens,
-        }
-      : undefined,
-  }
+function blockStatus(status: string | undefined): MessageBlockStatus {
+  if (status === 'error') return 'error'
+  if (status === 'streaming' || status === 'processing') return 'streaming'
+  return 'success'
 }
 
-/**
- * Map a Cherry Studio message block to an Orbit Chat message block.
- */
-function mapBlock(cb: CherryMessageBlock): MessageBlock {
-  return {
-    id: cb.id,
-    type: normalizeBlockType(cb.type),
-    content: cb.content ?? '',
-    status: cb.status,
-    createdAt: cb.createdAt,
-    citationReferences: cb.citationReferences,
-  }
+function messageRole(role: string): MessageRole {
+  return role === 'user' || role === 'assistant' || role === 'system' ? role : 'assistant'
 }
 
-function normalizeRole(role: string): MessageRole {
-  switch (role) {
-    case 'user':
-    case 'assistant':
-    case 'system':
-      return role
-    default:
-      return 'assistant'
-  }
-}
-
-function normalizeStatus(status: string | undefined): MessageStatus {
+function messageStatus(status: string | undefined): MessageStatus {
   switch (status) {
+    case 'pending':
     case 'sending':
+      return 'sending'
     case 'streaming':
-    case 'complete':
+    case 'processing':
+      return 'streaming'
     case 'error':
+      return 'error'
     case 'stopped':
-      return status
+      return 'stopped'
     default:
       return 'complete'
   }
 }
 
-function normalizeBlockType(type: string): MessageBlock['type'] {
-  switch (type) {
-    case 'main_text':
-    case 'thinking':
-    case 'error':
-    case 'citation':
-    case 'tool':
-    case 'unknown':
-      return type
-    default:
-      return 'unknown'
-  }
-}
-
-// ─── Settings mapping ─────────────────────────────────────────────────────────
-
-/**
- * Map Cherry Studio settings (119 keys) to Orbit Chat Settings.
- */
-function mapSettings(
-  cherrySettings: Record<string, unknown> | undefined,
-): Settings {
-  const s = cherrySettings ?? {}
+function mapBlock(source: CherryMessageBlock, fallback: string): MessageBlock {
   return {
-    language: typeof s.language === 'string' ? s.language : 'zh-CN',
-    theme: s.theme === 'dark' ? 'dark' : s.theme === 'auto' ? 'auto' : 'light',
-    fontSize: typeof s.fontSize === 'number' ? s.fontSize : 14,
-    sendShortcut: (s.sendMessageShortcut as Settings['sendShortcut']) ?? 'Enter',
-    autoScroll: true,
-    sendMessageShortcut: typeof s.sendMessageShortcut === 'string' ? s.sendMessageShortcut : undefined,
-    messageStyle: typeof s.messageStyle === 'string' ? s.messageStyle : undefined,
-    codeShowLineNumbers: typeof s.codeShowLineNumbers === 'boolean' ? s.codeShowLineNumbers : undefined,
-    showTokens: typeof s.showTokens === 'boolean' ? s.showTokens : undefined,
-    pinTopicsToTop: typeof s.pinTopicsToTop === 'boolean' ? s.pinTopicsToTop : undefined,
-    confirmDeleteMessage: typeof s.confirmDeleteMessage === 'boolean' ? s.confirmDeleteMessage : undefined,
-    // Preserve all other keys
-    ...s,
+    id: source.id,
+    type: blockType(source.type),
+    content: source.content ?? '',
+    status: blockStatus(source.status),
+    createdAt: toIso(source.createdAt, fallback),
+    citationReferences: source.citationReferences,
   }
 }
 
-// ─── Build full AppData ───────────────────────────────────────────────────────
+function mapMessage(
+  source: CherryMessage,
+  topicId: string,
+  blockById: Map<string, CherryMessageBlock>,
+  fallback: string,
+): ChatMessage {
+  // Cherry's message.blocks is the canonical rendering order.
+  const blocks = (source.blocks ?? [])
+    .map(id => blockById.get(id))
+    .filter((block): block is CherryMessageBlock => Boolean(block))
+    .map(block => mapBlock(block, fallback))
 
-/**
- * Build a complete AppData object from parsed Cherry Studio data.
- */
+  const content = source.content || blocks
+    .filter(block => block.type === 'main_text')
+    .map(block => block.content)
+    .join('')
+  const reasoningContent = blocks
+    .filter(block => block.type === 'thinking')
+    .map(block => block.content)
+    .join('')
+
+  return {
+    id: String(source.id),
+    topicId,
+    role: messageRole(source.role),
+    content,
+    createdAt: toIso(source.createdAt, fallback),
+    status: messageStatus(source.status),
+    model: modelName(source.model) ?? source.modelId,
+    reasoningContent: reasoningContent || undefined,
+    blocks,
+    usage: source.usage,
+  }
+}
+
+function mapSettings(source: Record<string, unknown> | undefined): Settings {
+  const raw = source ?? {}
+  const pickBoolean = (key: keyof Settings, fallback: boolean) =>
+    typeof raw[key] === 'boolean' ? raw[key] : fallback
+  const pickNumber = (key: keyof Settings, fallback: number) =>
+    typeof raw[key] === 'number' ? raw[key] : fallback
+  const pickString = (key: keyof Settings, fallback: string) =>
+    typeof raw[key] === 'string' ? raw[key] : fallback
+
+  const language = raw.language === 'en-US' ? 'en-US' : 'zh-CN'
+  const theme = raw.theme === 'dark' || raw.theme === 'auto' ? raw.theme : 'light'
+  const sendShortcut = raw.sendMessageShortcut === 'Ctrl+Enter' || raw.sendMessageShortcut === 'Shift+Enter'
+    ? raw.sendMessageShortcut
+    : 'Enter'
+
+  return {
+    ...DEFAULT_SETTINGS,
+    language,
+    theme,
+    sendShortcut,
+    fontSize: pickNumber('fontSize', DEFAULT_SETTINGS.fontSize),
+    autoCheckUpdate: pickBoolean('autoCheckUpdate', DEFAULT_SETTINGS.autoCheckUpdate),
+    messageStyle: raw.messageStyle === 'plain' ? 'plain' : 'bubble',
+    messageFont: raw.messageFont === 'serif' || raw.messageFont === 'mono' ? raw.messageFont : 'system',
+    codeShowLineNumbers: pickBoolean('codeShowLineNumbers', DEFAULT_SETTINGS.codeShowLineNumbers),
+    codeWrappable: pickBoolean('codeWrappable', DEFAULT_SETTINGS.codeWrappable),
+    codeCollapsible: pickBoolean('codeCollapsible', DEFAULT_SETTINGS.codeCollapsible),
+    foldDisplayMode: raw.foldDisplayMode === 'compact' ? 'compact' : 'full',
+    confirmDeleteMessage: pickBoolean('confirmDeleteMessage', DEFAULT_SETTINGS.confirmDeleteMessage),
+    confirmRegenerateMessage: pickBoolean('confirmRegenerateMessage', DEFAULT_SETTINGS.confirmRegenerateMessage),
+    showTokens: pickBoolean('showTokens', DEFAULT_SETTINGS.showTokens),
+    showMessageDivider: pickBoolean('showMessageDivider', DEFAULT_SETTINGS.showMessageDivider),
+    showMessageOutline: pickBoolean('showMessageOutline', DEFAULT_SETTINGS.showMessageOutline),
+    messageNavigation: pickBoolean('messageNavigation', DEFAULT_SETTINGS.messageNavigation),
+    enableTopicNaming: pickBoolean('enableTopicNaming', DEFAULT_SETTINGS.enableTopicNaming),
+    pinTopicsToTop: pickBoolean('pinTopicsToTop', DEFAULT_SETTINGS.pinTopicsToTop),
+    showTopics: pickBoolean('showTopics', DEFAULT_SETTINGS.showTopics),
+    showTopicTime: pickBoolean('showTopicTime', DEFAULT_SETTINGS.showTopicTime),
+    showInputEstimatedTokens: pickBoolean('showInputEstimatedTokens', DEFAULT_SETTINGS.showInputEstimatedTokens),
+    pasteLongTextAsFile: pickBoolean('pasteLongTextAsFile', DEFAULT_SETTINGS.pasteLongTextAsFile),
+    pasteLongTextThreshold: pickNumber('pasteLongTextThreshold', DEFAULT_SETTINGS.pasteLongTextThreshold),
+    renderInputMessageAsMarkdown: pickBoolean('renderInputMessageAsMarkdown', DEFAULT_SETTINGS.renderInputMessageAsMarkdown),
+    mathEngine: raw.mathEngine === 'mathjax' ? 'mathjax' : 'katex',
+    targetLanguage: pickString('targetLanguage', DEFAULT_SETTINGS.targetLanguage),
+  }
+}
+
 export function buildAppData(cherry: CherryData): AppData {
-  const persist = cherry.localStorage?.['persist:cherry-studio']
-  const indexedDB = cherry.indexedDB
+  const persist = cherry.localStorage['persist:cherry-studio']
+  const now = new Date().toISOString()
+  const providers = mapProviders(persist.llm.providers)
+  const assistants = mapAssistants(persist.assistants.assistants, persist.assistants.defaultAssistant)
+  const defaultAssistantId = assistants.find(assistant => assistant.isDefault)?.id ?? assistants[0]?.id
+  const topicRefs = buildTopicRefIndex(persist.assistants.assistants, persist.assistants.defaultAssistant)
+  const blockById = new Map((cherry.indexedDB.message_blocks ?? []).map(block => [block.id, block]))
 
-  const providers = mapProviders(persist?.llm?.providers)
-  const assistants = mapAssistants(
-    persist?.assistants?.assistants,
-    persist?.assistants?.defaultAssistant,
-  )
-
-  const defaultAssistantId =
-    assistants.find(a => a.isDefault)?.id ?? assistants[0]?.id ?? 'default'
-
-  // Build block map from indexedDB.message_blocks
-  const blockMap = buildBlockMap(indexedDB?.message_blocks)
-
-  const topics = mapTopics(indexedDB?.topics, blockMap, defaultAssistantId)
-
-  const settings = mapSettings(persist?.settings)
-
-  // Build messageBlocks storage (keyed by block id)
-  const messageBlocks: Record<string, MessageBlock> = {}
-  if (Array.isArray(indexedDB?.message_blocks)) {
-    for (const cb of indexedDB.message_blocks) {
-      messageBlocks[cb.id] = mapBlock(cb)
+  const topics: Topic[] = (cherry.indexedDB.topics ?? []).map(source => {
+    const ref = topicRefs.get(source.id)
+    return {
+      id: source.id,
+      assistantId: ref?.assistantId ?? defaultAssistantId ?? 'default',
+      name: ref?.name || '未命名对话',
+      messages: (source.messages ?? []).map(message => mapMessage(message, source.id, blockById, now)),
+      isNameManuallyEdited: ref?.isNameManuallyEdited ?? false,
+      pinned: false,
+      createdAt: toIso(ref?.createdAt, now),
+      updatedAt: toIso(ref?.updatedAt, now),
     }
-  }
+  })
 
   return {
-    version: SCHEMA_VERSION,
+    version: APP_DATA_VERSION,
     providers,
     assistants,
     topics,
-    settings,
-    cherryData: cherry,
-    messageBlocks,
+    settings: mapSettings(persist.settings),
   }
 }
 
-// ─── Merge logic ──────────────────────────────────────────────────────────────
+function createImportReport(cherry: CherryData, data: AppData): ImportReport {
+  const persist = cherry.localStorage['persist:cherry-studio']
+  const topicRefs = buildTopicRefIndex(persist.assistants.assistants, persist.assistants.defaultAssistant)
+  const sourceMessages = cherry.indexedDB.topics.flatMap(topic => topic.messages ?? [])
+  const sourceMessageIds = new Set(sourceMessages.map(message => message.id))
+  const blockIds = new Set(cherry.indexedDB.message_blocks.map(block => block.id))
+  const warnings: string[] = []
 
-/**
- * Merge two AppData objects.
- *
- * - Providers & Assistants: merged by id; incoming overwrites existing.
- * - Topics: merged by id; messages deduplicated by id (incoming takes precedence).
- * - Settings & compatZone: incoming overwrites existing.
- * - cherryData & messageBlocks: incoming overwrites existing (if provided).
- */
-export function mergeAppData(existing: AppData, incoming: AppData): AppData {
-  // ── Providers ──
-  const providerMap = new Map<string, Provider>()
-  for (const p of existing.providers) providerMap.set(p.id, p)
-  for (const p of incoming.providers) providerMap.set(p.id, p)
+  const fallbackTopics = cherry.indexedDB.topics.filter(topic => !topicRefs.has(topic.id)).length
+  if (fallbackTopics > 0) warnings.push(`${fallbackTopics} 个 Topic 缺少 Assistant 引用，已归入默认 Assistant。`)
 
-  // ── Assistants ──
-  const assistantMap = new Map<string, Assistant>()
-  for (const a of existing.assistants) assistantMap.set(a.id, a)
-  for (const a of incoming.assistants) assistantMap.set(a.id, a)
+  const missingBlockRefs = sourceMessages
+    .flatMap(message => message.blocks ?? [])
+    .filter(blockId => !blockIds.has(blockId)).length
+  if (missingBlockRefs > 0) warnings.push(`${missingBlockRefs} 个 MessageBlock 引用缺失，已跳过。`)
 
-  // ── Topics (merge messages by id, dedup) ──
-  const topicMap = new Map<string, Topic>()
-  for (const t of existing.topics) topicMap.set(t.id, t)
+  const orphanBlocks = cherry.indexedDB.message_blocks.filter(block => !sourceMessageIds.has(block.messageId)).length
+  if (orphanBlocks > 0) warnings.push(`${orphanBlocks} 个孤立 MessageBlock 未导入。`)
 
-  for (const incomingTopic of incoming.topics) {
-    const existingTopic = topicMap.get(incomingTopic.id)
-    if (!existingTopic) {
-      topicMap.set(incomingTopic.id, incomingTopic)
-      continue
-    }
-
-    const messageMap = new Map<string, ChatMessage>()
-    for (const m of existingTopic.messages) messageMap.set(String(m.id), m)
-    for (const m of incomingTopic.messages) messageMap.set(String(m.id), m)
-
-    topicMap.set(incomingTopic.id, {
-      ...existingTopic,
-      ...incomingTopic,
-      messages: Array.from(messageMap.values()),
-    })
+  return {
+    providerCount: data.providers.length,
+    assistantCount: data.assistants.length,
+    topicCount: data.topics.length,
+    messageCount: data.topics.reduce((count, topic) => count + topic.messages.length, 0),
+    blockCount: data.topics.reduce((count, topic) => count + topic.messages.reduce((total, message) => total + message.blocks.length, 0), 0),
+    warnings,
   }
+}
 
-  // ── messageBlocks ──
-  const mergedMessageBlocks: Record<string, MessageBlock> = {
-    ...(existing.messageBlocks ?? {}),
-    ...(incoming.messageBlocks ?? {}),
+export function mergeAppData(existing: AppData, incoming: AppData): AppData {
+  const mergeEntities = <T extends { id: string }>(current: T[], next: T[]) =>
+    Array.from(new Map([...current, ...next].map(item => [item.id, item])).values())
+
+  const existingTopics = new Map(existing.topics.map(topic => [topic.id, topic]))
+  const topics = incoming.topics.map(topic => {
+    const current = existingTopics.get(topic.id)
+    if (!current) return topic
+    const messages = mergeEntities(current.messages, topic.messages)
+      .sort((left, right) => left.createdAt.localeCompare(right.createdAt))
+    return { ...current, ...topic, messages }
+  })
+
+  for (const topic of existing.topics) {
+    if (!topics.some(candidate => candidate.id === topic.id)) topics.push(topic)
   }
 
   return {
-    version: Math.max(existing.version, incoming.version),
-    providers: Array.from(providerMap.values()),
-    assistants: Array.from(assistantMap.values()),
-    topics: Array.from(topicMap.values()),
+    version: APP_DATA_VERSION,
+    providers: mergeEntities(existing.providers, incoming.providers),
+    assistants: mergeEntities(existing.assistants, incoming.assistants),
+    topics,
     settings: { ...existing.settings, ...incoming.settings },
-    cherryData: incoming.cherryData ?? existing.cherryData,
-    compatZone: { ...existing.compatZone, ...incoming.compatZone },
-    messageBlocks: mergedMessageBlocks,
   }
 }
 
-// ─── Import from file ─────────────────────────────────────────────────────────
-
-/**
- * Import AppData from a Cherry Studio export file.
- */
-export async function importFromFile(
-  file: File,
-): Promise<{ ok: true; data: AppData } | { ok: false; error: string }> {
+export async function importFromFile(file: File): Promise<{ ok: true; data: AppData; report: ImportReport } | { ok: false; error: string }> {
   try {
-    const text = await file.text()
-    const parsed = parseDataJSON(text)
-
-    if (!parsed.ok || !parsed.data) {
-      return { ok: false, error: parsed.error ?? 'Unknown parse error' }
-    }
-
-    const appData = buildAppData(parsed.data)
-    return { ok: true, data: appData }
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err)
-    return { ok: false, error: message }
+    const parsed = parseDataJSON(await file.text())
+    if (!parsed.ok || !parsed.data) return { ok: false, error: parsed.error ?? '无法解析导入文件' }
+    const data = buildAppData(parsed.data)
+    return { ok: true, data, report: createImportReport(parsed.data, data) }
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : String(error) }
   }
 }

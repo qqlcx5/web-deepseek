@@ -18,7 +18,6 @@ function getAttachmentItems() {
     name: f.name,
     description: `已加入上下文 · ${f.size}`,
     status: 'done' as const,
-    fileType: 'file',
   }))
 }
 

@@ -94,7 +94,7 @@ if (typeof document !== 'undefined') {
         <span class="shortcut">⌘ K</span>
       </button>
       <div class="sidebar-data-actions">
-        <button class="data-btn tooltip" data-tip="导入 Cherry Studio 数据" @click="$refs.fileInput?.click()">
+        <button class="data-btn tooltip" data-tip="导入 Cherry Studio 数据" @click="fileInput?.click()">
           <Icon icon="tabler:upload" width="14" />
           导入
         </button>

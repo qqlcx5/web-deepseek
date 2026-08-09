@@ -19,8 +19,9 @@ const store = useChatStore()
   display: flex; min-height: 34px; align-items: center; gap: 7px;
   padding: 7px 12px; color: #fff; background: var(--text);
   border-radius: 7px; box-shadow: var(--shadow-lg);
-  font-size: 11px; transform: translateX(-50%);
-  max-width: calc(100vw - 40px);
+  max-width: min(520px, calc(100vw - 40px)); max-height: 55dvh;
+  overflow-y: auto; font-size: 11px; line-height: 1.5; white-space: pre-line;
+  transform: translateX(-50%);
 }
 .toast :deep(svg) { width: 14px; }
 .toast-action {

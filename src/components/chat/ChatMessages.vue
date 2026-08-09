@@ -133,7 +133,7 @@ defineExpose({ scrollToBottom })
               <div class="message-meta">
                 <span class="message-author">Assistant</span>
                 <span v-if="message.model" class="message-model">{{ message.model }}</span>
-                <span class="message-time">{{ message.time }}</span>
+                <span class="message-time">{{ new Date(message.createdAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) }}</span>
               </div>
 
               <!-- Block-based rendering (if blocks exist) -->
@@ -294,7 +294,7 @@ defineExpose({ scrollToBottom })
           <template v-else>
             <div class="message-content">
               <div class="user-bubble">{{ message.content }}</div>
-              <div class="user-time">{{ message.time }}</div>
+              <div class="user-time">{{ new Date(message.createdAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) }}</div>
               <div class="message-tools" style="justify-content:flex-end">
                 <button class="message-tool tooltip" data-tip="编辑并重新发送" @click="store.editMessage(message)">
                   <Icon icon="tabler:pencil" />

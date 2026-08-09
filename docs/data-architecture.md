@@ -11,7 +11,7 @@ AIGC:
 
 # Data Architecture — Cherry Studio 数据架构分析
 
-> 基于 `data.json`（3.0 MB / 3,174,637 bytes）的完整数据结构逆向分析。  
+> 基于 `data.json`（3.0 MB / 3,174,637 bytes）的完整数据结构逆向分析。
 > 源：Cherry Studio 导出格式。目标：为 Web 端数据架构改造提供参考。
 
 ---

@@ -4,10 +4,11 @@ import type { ThemeMode } from '@/types/chat'
 const STORAGE_KEY = 'theme-mode'
 
 function getSystemDark(): boolean {
-  return window.matchMedia('(prefers-color-scheme: dark)').matches
+  return typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches
 }
 
 function getInitialMode(): ThemeMode {
+  if (typeof localStorage === 'undefined') return 'light'
   const stored = localStorage.getItem(STORAGE_KEY) as ThemeMode | null
   if (stored === 'light' || stored === 'dark' || stored === 'auto') return stored
   return 'light'
@@ -19,7 +20,9 @@ const isDark = ref(false)
 function applyTheme() {
   const dark = mode.value === 'dark' || (mode.value === 'auto' && getSystemDark())
   isDark.value = dark
-  document.documentElement.classList.toggle('dark', dark)
+  if (typeof document !== 'undefined') {
+    document.documentElement.classList.toggle('dark', dark)
+  }
 }
 
 // Listen for system theme changes
@@ -30,7 +33,7 @@ if (typeof window !== 'undefined') {
 }
 
 watch(mode, () => {
-  localStorage.setItem(STORAGE_KEY, mode.value)
+  if (typeof localStorage !== 'undefined') localStorage.setItem(STORAGE_KEY, mode.value)
   applyTheme()
 }, { immediate: true })
 

@@ -11,7 +11,13 @@ const uiStore = useUiStore()
 const searchQuery = ref('')
 const expandedId = ref<string | null>(null)
 const editingProvider = ref<Provider | null>(null)
-const newModelDraft = ref<ModelInfo>({ id: '', name: '', providerId: '', enabled: true })
+const newModelDraft = ref<ModelInfo>({ id: '', name: '', enabled: true })
+const showNewProvider = ref(false)
+const newProvider = ref<Provider>({ id: '', name: '', apiHost: '', apiKey: '', models: [], enabled: true })
+const modelIdError = ref('')
+const providerNameError = ref('')
+const deleteConfirmId = ref<string | null>(null)
+const deleteWarning = ref('')
 
 const filteredProviders = computed(() => {
   const q = searchQuery.value.trim().toLowerCase()
@@ -41,6 +47,27 @@ function toggleModel(provider: Provider, model: ModelInfo) {
   appStore.updateProvider(provider.id, { models: updatedModels })
 }
 
+function checkModelIdDuplicate(models: ModelInfo[], id: string): boolean {
+  return models.some(m => m.id === id)
+}
+
+function checkProviderName(name: string): boolean {
+  providerNameError.value = ''
+  if (!name.trim()) {
+    providerNameError.value = '名称不能为空'
+    return false
+  }
+  return true
+}
+
+function checkProviderHost(host: string): boolean {
+  if (!host.trim()) {
+    providerNameError.value = 'API Host 不能为空'
+    return false
+  }
+  return true
+}
+
 function startEdit(provider: Provider) {
   editingProvider.value = JSON.parse(JSON.stringify(provider))
   expandedId.value = provider.id
@@ -52,31 +79,95 @@ function cancelEdit() {
 
 function saveEdit() {
   if (!editingProvider.value) return
-  appStore.updateProvider(editingProvider.value.id, {
-    name: editingProvider.value.name,
-    apiHost: editingProvider.value.apiHost,
+  if (!checkProviderName(editingProvider.value.name) || !checkProviderHost(editingProvider.value.apiHost)) return
+  const result = appStore.updateProvider(editingProvider.value.id, {
+    name: editingProvider.value.name.trim(),
+    apiHost: editingProvider.value.apiHost.trim(),
     apiKey: editingProvider.value.apiKey,
     models: editingProvider.value.models,
   })
+  if (!result.ok) {
+    providerNameError.value = result.error ?? 'Provider 更新失败'
+    return
+  }
   editingProvider.value = null
   uiStore.showToast('Provider 已更新')
 }
 
 function addModel() {
   if (!editingProvider.value || !newModelDraft.value.id.trim()) return
+  const id = newModelDraft.value.id.trim()
+  if (checkModelIdDuplicate(editingProvider.value.models, id)) {
+    modelIdError.value = `模型 ID "${id}" 已存在`
+    return
+  }
+  modelIdError.value = ''
   const model: ModelInfo = {
-    id: newModelDraft.value.id.trim(),
-    name: newModelDraft.value.name.trim() || newModelDraft.value.id.trim(),
-    providerId: editingProvider.value.id,
+    id,
+    name: newModelDraft.value.name.trim() || id,
     enabled: true,
   }
   editingProvider.value.models.push(model)
-  newModelDraft.value = { id: '', name: '', providerId: '', enabled: true }
+  newModelDraft.value = { id: '', name: '', enabled: true }
+}
+
+function toggleEditingModel(modelId: string) {
+  if (!editingProvider.value) return
+  editingProvider.value.models = editingProvider.value.models.map(model =>
+    model.id === modelId ? { ...model, enabled: !model.enabled } : model,
+  )
 }
 
 function removeModel(modelId: string) {
   if (!editingProvider.value) return
-  editingProvider.value.models = editingProvider.value.models.filter(m => m.id !== modelId)
+  const dependent = appStore.assistantUsingModel(modelId)
+  if (dependent) {
+    modelIdError.value = `Assistant “${dependent.name}”仍在使用该模型`
+    return
+  }
+  editingProvider.value.models = editingProvider.value.models.filter(model => model.id !== modelId)
+}
+
+function startNewProvider() {
+  newProvider.value = { id: `provider-${crypto.randomUUID()}`, name: '', apiHost: '', apiKey: '', models: [], enabled: true }
+  showNewProvider.value = true
+  providerNameError.value = ''
+}
+
+function saveNewProvider() {
+  if (!checkProviderName(newProvider.value.name) || !checkProviderHost(newProvider.value.apiHost)) return
+  if (appStore.providers.some(p => p.id === newProvider.value.id)) {
+    providerNameError.value = 'Provider ID 已存在'
+    return
+  }
+  const result = appStore.addProvider({ ...newProvider.value, name: newProvider.value.name.trim(), apiHost: newProvider.value.apiHost.trim() })
+  if (!result.ok) {
+    providerNameError.value = result.error ?? 'Provider 创建失败'
+    return
+  }
+  showNewProvider.value = false
+  uiStore.showToast('Provider 已创建')
+}
+
+function requestDeleteProvider(provider: Provider) {
+  deleteWarning.value = ''
+  deleteConfirmId.value = provider.id
+}
+
+function confirmDeleteProvider() {
+  if (!deleteConfirmId.value) return
+  const providerId = deleteConfirmId.value
+  const result = appStore.removeProvider(providerId)
+  if (!result.ok) {
+    deleteWarning.value = result.error ?? '无法删除 Provider'
+    return
+  }
+  if (expandedId.value === providerId) {
+    expandedId.value = null
+    editingProvider.value = null
+  }
+  deleteConfirmId.value = null
+  uiStore.showToast('Provider 已删除')
 }
 
 function close() {
@@ -104,6 +195,47 @@ function close() {
           placeholder="搜索 Provider 或模型..."
           class="search-input"
         />
+        <button class="add-provider-btn" @click="startNewProvider">
+          <Icon icon="tabler:plus" width="15" />
+          新建
+        </button>
+      </div>
+
+      <!-- New Provider Form -->
+      <div v-if="showNewProvider" class="provider-card expanded">
+        <div class="provider-edit">
+          <div class="edit-row">
+            <label class="field-label">名称</label>
+            <input v-model="newProvider.name" class="field-input" placeholder="例如：OpenAI" />
+          </div>
+          <div class="edit-row">
+            <label class="field-label">API Host</label>
+            <input v-model="newProvider.apiHost" class="field-input" placeholder="https://api.example.com" />
+          </div>
+          <div class="edit-row">
+            <label class="field-label">API Key</label>
+            <input v-model="newProvider.apiKey" class="field-input" type="password" placeholder="sk-..." />
+          </div>
+          <div v-if="providerNameError" class="field-error">{{ providerNameError }}</div>
+          <div class="edit-actions">
+            <button class="secondary" @click="showNewProvider = false">取消</button>
+            <button class="primary" @click="saveNewProvider">
+              <Icon icon="tabler:check" width="14" />
+              创建
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div v-if="deleteConfirmId" class="delete-confirm" role="alertdialog" aria-modal="true">
+        <div class="delete-confirm-copy">
+          <strong>删除 Provider</strong>
+          <span>{{ deleteWarning || '该操作不可撤销。确认后将删除 Provider 及其未被引用的模型。' }}</span>
+        </div>
+        <div class="edit-actions">
+          <button class="secondary" @click="deleteConfirmId = null; deleteWarning = ''">取消</button>
+          <button class="danger-primary" @click="confirmDeleteProvider">确认删除</button>
+        </div>
       </div>
 
       <div class="provider-list scroll">
@@ -120,6 +252,9 @@ function close() {
                 {{ maskKey(provider.apiKey) }} · {{ provider.models.length }} 个模型 · {{ provider.apiHost || '无 API Host' }}
               </div>
             </div>
+            <button class="icon-btn danger-btn tooltip" data-tip="删除 Provider" @click.stop="requestDeleteProvider(provider)">
+              <Icon icon="tabler:trash" width="14" />
+            </button>
             <label class="toggle" @click.stop>
               <input
                 type="checkbox"
@@ -164,15 +299,20 @@ function close() {
                   @keydown.enter="addModel"
                 />
               </div>
+              <div v-if="modelIdError" class="field-error">{{ modelIdError }}</div>
 
               <div
                 v-for="model in editingProvider.models"
                 :key="model.id"
                 class="model-row"
               >
-                <span class="model-row-name">{{ model.name }}</span>
+                <input v-model="model.name" class="model-row-name field-input" aria-label="模型显示名称" />
                 <span class="model-row-id">{{ model.id }}</span>
-                <button class="icon-btn danger-btn" @click="removeModel(model.id)">
+                <label class="toggle small-toggle" :aria-label="model.enabled ? '禁用模型' : '启用模型'">
+                  <input type="checkbox" :checked="model.enabled" @change="toggleEditingModel(model.id)" />
+                  <span class="toggle-slider" />
+                </label>
+                <button class="icon-btn danger-btn tooltip" data-tip="删除模型" @click="removeModel(model.id)">
                   <Icon icon="tabler:trash" width="14" />
                 </button>
               </div>
@@ -212,10 +352,13 @@ function close() {
 .dialog-head .icon-btn { margin-top: -4px; }
 .dialog-body { padding: 12px 16px; display: flex; flex-direction: column; min-height: 0; flex: 1; overflow: hidden; }
 
-.search-bar { position: relative; margin-bottom: 10px; flex-shrink: 0; }
+.search-bar { position: relative; display: flex; align-items: center; gap: 6px; margin-bottom: 10px; flex-shrink: 0; }
 .search-bar :deep(svg) { position: absolute; top: 10px; left: 10px; width: 15px; color: var(--faint); }
-.search-input { width: 100%; height: 34px; padding: 0 10px 0 32px; color: var(--text); background: var(--surface-2); border: 1px solid var(--line); border-radius: 6px; font-size: 11px; outline: 0; }
+.search-input { width: auto; min-width: 0; height: 34px; flex: 1; padding: 0 10px 0 32px; color: var(--text); background: var(--surface-2); border: 1px solid var(--line); border-radius: 6px; font-size: 11px; outline: 0; }
 .search-input:focus { border-color: var(--brand); }
+.add-provider-btn { display: inline-flex; height: 34px; align-items: center; gap: 4px; padding: 0 10px; color: white; background: var(--brand); border: 0; border-radius: 6px; font-size: 11px; font-weight: 600; cursor: pointer; white-space: nowrap; flex-shrink: 0; }
+.add-provider-btn:hover { filter: brightness(1.08); }
+.field-error { color: var(--danger); font-size: 10px; margin-top: 2px; }
 
 .provider-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; padding-right: 4px; }
 
@@ -246,8 +389,9 @@ function close() {
 .model-id-input { flex: 1; }
 .model-name-input { flex: 1; }
 .model-row { display: flex; align-items: center; gap: 8px; padding: 5px 8px; background: var(--surface); border: 1px solid var(--line); border-radius: 5px; }
-.model-row-name { font-size: 10px; font-weight: 600; color: var(--text); }
-.model-row-id { font-size: 9px; color: var(--faint); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.model-row-name { min-width: 0; height: 26px; flex: 1; font-size: 10px; font-weight: 600; color: var(--text); }
+.model-row-id { min-width: 0; color: var(--faint); flex: 1; overflow: hidden; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.small-toggle { transform: scale(0.8); }
 .danger-btn { width: 24px; height: 24px; flex: 0 0 24px; color: var(--danger); }
 .danger-btn:hover { background: color-mix(in srgb, var(--danger) 10%, transparent); }
 
@@ -258,6 +402,10 @@ function close() {
 .secondary:hover { background: var(--surface-3); }
 .panel-edit { color: var(--brand); background: transparent; font-size: 10px; border: 0; cursor: pointer; }
 
+.delete-confirm { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; padding: 10px 11px; color: var(--danger); background: color-mix(in srgb, var(--danger) 8%, var(--surface)); border: 1px solid color-mix(in srgb, var(--danger) 30%, var(--line)); border-radius: 6px; }
+.delete-confirm-copy { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 3px; font-size: 10px; }
+.delete-confirm-copy span { color: var(--text-secondary); line-height: 1.5; }
+.danger-primary { display: inline-flex; min-height: 30px; align-items: center; justify-content: center; padding: 0 11px; color: white; background: var(--danger); border: 0; border-radius: 5px; font-size: 11px; font-weight: 600; cursor: pointer; }
 .empty-hint { text-align: center; padding: 24px 0; color: var(--faint); font-size: 11px; }
 
 .icon-btn { display: inline-flex; width: 34px; height: 34px; flex: 0 0 34px; align-items: center; justify-content: center; border-radius: 6px; color: var(--muted); background: transparent; border: 0; cursor: pointer; transition: background 140ms, color 140ms; }

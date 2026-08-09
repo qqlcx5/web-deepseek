@@ -9,7 +9,6 @@ export {}
 declare module 'vue' {
   export interface GlobalComponents {
     AssistantSettings: typeof import('./components/chat/AssistantSettings.vue')['default']
-    ChatAttachments: typeof import('./components/chat/ChatAttachments.vue')['default']
     ChatComposer: typeof import('./components/chat/ChatComposer.vue')['default']
     ChatInspector: typeof import('./components/chat/ChatInspector.vue')['default']
     ChatMessages: typeof import('./components/chat/ChatMessages.vue')['default']

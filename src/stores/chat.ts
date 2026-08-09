@@ -1,140 +1,87 @@
-// ─── Chat Store: Conversation Runtime State ───────────────────────────────────
-// Manages: active topic, messages, draft, streaming, attachments, branching.
-// Delegates persistence to appStore, UI state to uiStore.
+// ─── Chat Store: Conversation Runtime ─────────────────────────────────────────
 
+import { computed, ref, watch } from 'vue'
 import { defineStore } from 'pinia'
-import { ref, computed, watch } from 'vue'
-import type { ChatMessage, Attachment, ChatStreamDelta, ModalType, MessageBlock } from '@/types'
-import { useAppStore } from './app'
-import { useUiStore } from './ui'
+import type { Attachment, ChatMessage, ChatStreamDelta, MessageBlock, Model } from '@/types'
 import { chatApi, type ChatRequestParams } from '@/api/chat-api'
 import { estimateTokens } from '@/utils/token-counter'
+import { useAppStore } from './app'
+import { useUiStore } from './ui'
 
 export interface SearchResult {
   topicId: string
   topicName: string
-  messageId: string | number
+  messageId: string
   content: string
   time: string
+}
+
+function createId(prefix: string): string {
+  return `${prefix}-${crypto.randomUUID()}`
+}
+
+function timestamp(): string {
+  return new Date().toISOString()
 }
 
 export const useChatStore = defineStore('chat', () => {
   const appStore = useAppStore()
   const uiStore = useUiStore()
 
-  // ─── State ───
   const activeChatId = ref<string | null>(null)
   const messages = ref<ChatMessage[]>([])
-  const draft = ref(localStorage.getItem('orbit-draft') || '')
+  const draft = ref(localStorage.getItem('orbit-draft') ?? '')
   const replyingTo = ref('')
-  const replyingToMsgId = ref<string | number | null>(null)
+  const replyingToMsgId = ref<string | null>(null)
   const generating = ref(false)
   const abortController = ref<AbortController | null>(null)
   const attachments = ref<Attachment[]>([])
 
-  // ─── Getters ───
-  const currentChat = computed(() =>
-    activeChatId.value ? appStore.topicById(activeChatId.value) : undefined,
-  )
+  const currentChat = computed(() => activeChatId.value ? appStore.topicById(activeChatId.value) : undefined)
+  const chats = computed(() => appStore.sortedTopics.map(topic => ({
+    id: topic.id,
+    title: topic.name,
+    preview: topic.messages.at(-1)?.content.slice(0, 50) || '暂无消息',
+    pinned: topic.pinned,
+    createdAt: topic.createdAt,
+    updatedAt: topic.updatedAt,
+    messageCount: topic.messages.length,
+  })))
+  const canSend = computed(() => Boolean(draft.value.trim() || attachments.value.length) && !generating.value)
 
-  const chats = computed(() =>
-    appStore.sortedTopics.map(t => ({
-      ...t,
-      title: t.name,
-      preview: t.messages?.length
-        ? t.messages[t.messages.length - 1]?.content?.slice(0, 50)
-        : '暂无消息',
-    })),
-  )
-
-  const canSend = computed(() =>
-    Boolean(draft.value.trim() || attachments.value.length) && !generating.value,
-  )
-
-  const sidebarOpen = computed({
-    get: () => uiStore.sidebarOpen,
-    set: (v: boolean) => { uiStore.sidebarOpen = v },
-  })
-  const focusMode = computed(() => uiStore.focusMode)
-  const inspectorVisible = computed(() => uiStore.inspectorVisible)
-  const inspectorOpen = computed(() => uiStore.inspectorOpen)
-  const modal = computed({
-    get: () => uiStore.modal,
-    set: (v: ModalType) => { uiStore.modal = v },
-  })
+  const sidebarOpen = computed({ get: () => uiStore.sidebarOpen, set: value => { uiStore.sidebarOpen = value } })
+  const focusMode = computed({ get: () => uiStore.focusMode, set: value => { uiStore.focusMode = value } })
+  const inspectorVisible = computed({ get: () => uiStore.inspectorVisible, set: value => { uiStore.inspectorVisible = value } })
+  const inspectorOpen = computed({ get: () => uiStore.inspectorOpen, set: value => { uiStore.inspectorOpen = value } })
+  const modal = computed({ get: () => uiStore.modal, set: value => { uiStore.modal = value } })
+  const nearBottom = computed({ get: () => uiStore.nearBottom, set: value => { uiStore.nearBottom = value } })
+  const commandQuery = computed({ get: () => uiStore.commandQuery, set: value => { uiStore.commandQuery = value } })
+  const promptDraft = computed({ get: () => uiStore.promptDraft, set: value => { uiStore.promptDraft = value } })
+  const selectedModel = computed<Model | null>({ get: () => uiStore.selectedModel, set: value => { uiStore.selectedModel = value } })
+  const saving = computed(() => appStore.saving || generating.value)
+  const saveError = computed(() => appStore.saveError)
   const toast = computed(() => uiStore.toast)
+  const undoAction = computed(() => uiStore.undoAction)
   const online = computed(() => uiStore.online)
-  const saving = computed(() => uiStore.saving)
-  const nearBottom = computed({
-    get: () => uiStore.nearBottom,
-    set: (v: boolean) => { uiStore.nearBottom = v },
-  })
-  const commandQuery = computed(() => uiStore.commandQuery)
-  const promptDraft = computed({
-    get: () => uiStore.promptDraft,
-    set: (v: string) => { uiStore.promptDraft = v },
-  })
-  const selectedModel = computed(() => uiStore.selectedModel)
-  const workspaces = computed(() => uiStore.workspaces)
-  const models = computed(() => uiStore.models)
-  const promptPresets = computed(() => uiStore.promptPresets)
-  const commands = computed(() => uiStore.commands)
-  const filteredCommands = computed(() => uiStore.filteredCommands)
 
   const filteredCommandChats = computed(() => {
-    const q = uiStore.commandQuery.trim().toLowerCase()
-    if (!q) return chats.value.slice(0, 5)
-    return chats.value.filter(c =>
-      `${c.name} ${c.preview ?? ''}`.toLowerCase().includes(q),
-    ).slice(0, 5)
+    const query = commandQuery.value.trim().toLowerCase()
+    if (!query) return chats.value.slice(0, 5)
+    return chats.value.filter(chat => `${chat.title} ${chat.preview}`.toLowerCase().includes(query)).slice(0, 5)
   })
 
-  // Search results for command palette
-  const searchResults = computed<SearchResult[]>(() => {
-    const q = uiStore.commandQuery.trim().toLowerCase()
-    if (!q || q.length < 1) return []
-    const results: SearchResult[] = []
-    for (const topic of appStore.topics) {
-      for (const msg of topic.messages) {
-        if (msg.content && msg.content.toLowerCase().includes(q)) {
-          results.push({
-            topicId: topic.id,
-            topicName: topic.name,
-            messageId: msg.id,
-            content: msg.content,
-            time: msg.time,
-          })
-          if (results.length >= 20) return results
-        }
-      }
-    }
-    return results
-  })
+  const searchResults = computed<SearchResult[]>(() => searchMessages(commandQuery.value).slice(0, 20))
 
-  // ─── Compat: forward UI store setters (so existing components work) ───
-  function setSidebarOpen(v: boolean) { uiStore.sidebarOpen = v }
-  function setFocusMode(v: boolean) { uiStore.focusMode = v }
-  function setInspectorOpen(v: boolean) { uiStore.inspectorOpen = v }
-  function setInspectorVisible(v: boolean) { uiStore.inspectorVisible = v }
-  function setModal(v: ModalType) { uiStore.modal = v }
-  function setCommandQuery(v: string) { uiStore.commandQuery = v }
-  function setPromptDraft(v: string) { uiStore.promptDraft = v }
-  function setNearBottom(v: boolean) { uiStore.nearBottom = v }
-
-  // ─── Conversation switching ───
   function openConversation(id: string) {
-    // Abort any ongoing stream
     if (generating.value) stopGeneration()
     activeChatId.value = id
-    const topic = appStore.topicById(id)
-    messages.value = topic?.messages ? [...topic.messages] : []
+    messages.value = [...(appStore.topicById(id)?.messages ?? [])]
     uiStore.closeDrawers()
   }
 
   function newConversation() {
     if (generating.value) stopGeneration()
-    const assistantId = appStore.defaultAssistant?.id ?? 'default'
-    const topic = appStore.addTopic(assistantId)
+    const topic = appStore.addTopic(appStore.defaultAssistant?.id)
     activeChatId.value = topic.id
     messages.value = []
     uiStore.closeDrawers()
@@ -152,9 +99,7 @@ export const useChatStore = defineStore('chat', () => {
 
   function clearConversation(id: string) {
     appStore.clearMessages(id)
-    if (activeChatId.value === id) {
-      messages.value = []
-    }
+    if (activeChatId.value === id) messages.value = []
     uiStore.showToast('对话已清空')
   }
 
@@ -163,415 +108,238 @@ export const useChatStore = defineStore('chat', () => {
   }
 
   function togglePin(id: string) {
-    const topic = appStore.topicById(id)
-    if (topic) appStore.togglePin(id)
+    appStore.togglePin(id)
   }
 
-  // ─── Init app ───
   async function initApp() {
     await appStore.init()
-    // Auto-select first topic if any
+    uiStore.initSelectedModel()
     if (!activeChatId.value && appStore.sortedTopics.length > 0) {
       openConversation(appStore.sortedTopics[0]!.id)
     }
   }
 
-  // ─── Streaming ───
-  async function streamChat(assistantMsg: ChatMessage) {
-    generating.value = true
-    assistantMsg.status = 'streaming'
-    assistantMsg.loading = true
+  function getActiveModel(): Model {
+    const topicAssistant = currentChat.value
+      ? appStore.assistants.find(assistant => assistant.id === currentChat.value?.assistantId)
+      : appStore.defaultAssistant
+    const assistantModel = topicAssistant?.model
+    const selected = assistantModel ? uiStore.models.find(model => model.id === assistantModel) : selectedModel.value
+    const fallback = selected ?? uiStore.models[0] ?? selectedModel.value
+    if (!fallback) throw new Error('请先配置并启用一个模型')
+    return fallback
+  }
 
-    // Initialize blocks array on the assistant message
-    if (!assistantMsg.blocks) {
-      assistantMsg.blocks = []
+  function findOrCreateBlock(message: ChatMessage, type: MessageBlock['type']): MessageBlock {
+    const current = message.blocks.find(block => block.type === type)
+    if (current) return current
+    const block: MessageBlock = {
+      id: createId('block'),
+      type,
+      content: '',
+      status: 'streaming',
+      createdAt: timestamp(),
     }
+    message.blocks.push(block)
+    return block
+  }
 
+  async function streamChat(assistantMessage: ChatMessage, context = messages.value) {
+    generating.value = true
+    assistantMessage.status = 'streaming'
+    assistantMessage.loading = true
     abortController.value = new AbortController()
 
-    // Gather provider info from selected model and appStore providers
-    const selectedModel = uiStore.selectedModel
-    const providers = appStore.providers
-    // Match provider by model id prefix or by provider id
-    const provider = providers.find(p =>
-      p.models?.some(m => m.id === selectedModel?.id) ||
-      p.id === selectedModel?.id?.split('-')[0],
-    )
-
-    const params: ChatRequestParams = {
-      messages: messages.value
-        .filter(m => m.status === 'complete' || m.status === 'streaming' || m.status === 'stopped')
-        .map(m => ({ role: m.role, content: m.content })),
-      model: selectedModel?.id ?? 'deepseek-chat',
-      signal: abortController.value.signal,
-      ...(provider?.apiHost && provider?.apiKey && {
-        provider: { apiHost: provider.apiHost, apiKey: provider.apiKey },
-      }),
-    }
-
-    // Helper: find or create a block of given type
-    function findOrCreateBlock(type: MessageBlock['type']): MessageBlock {
-      let block = (assistantMsg.blocks ?? []).find(b => b.type === type)
-      if (!block) {
-        block = {
-          id: `block-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-          type,
-          content: '',
-          status: 'streaming',
-          createdAt: Date.now(),
-        }
-        if (!assistantMsg.blocks) assistantMsg.blocks = []
-        assistantMsg.blocks.push(block)
-      }
-      return block
-    }
-
     try {
-      const stream = await chatApi.chatStream(params)
-      const reader = stream.getReader()
+      const model = getActiveModel()
+      assistantMessage.model = model.name
+      const provider = appStore.providers.find(candidate => candidate.id === model.providerId)
+      const params: ChatRequestParams = {
+        messages: context
+          .filter(message => message.content && (message.status === 'complete' || message.status === 'stopped'))
+          .map(message => ({ role: message.role, content: message.content })),
+        model: model.id,
+        signal: abortController.value.signal,
+        ...(provider?.apiHost ? { provider: { apiHost: provider.apiHost, apiKey: provider.apiKey } } : {}),
+      }
+
+      const reader = (await chatApi.chatStream(params)).getReader()
       const decoder = new TextDecoder()
       let buffer = ''
+      let lastPersistAt = 0
 
       while (true) {
         const { done, value } = await reader.read()
         if (done) break
-
         buffer += decoder.decode(value, { stream: true })
         const lines = buffer.split('\n')
         buffer = lines.pop() ?? ''
 
         for (const line of lines) {
-          const trimmed = line.trim()
-          if (!trimmed.startsWith('data: ')) continue
-          const json = trimmed.slice(6)
+          const payload = line.trim()
+          if (!payload.startsWith('data: ')) continue
+          const json = payload.slice(6)
           if (json === '[DONE]') continue
           try {
             const delta = JSON.parse(json) as ChatStreamDelta
-            // Parse reasoning_content into a thinking block
             if (delta.reasoning_content) {
-              assistantMsg.reasoningContent = (assistantMsg.reasoningContent ?? '') + delta.reasoning_content
-              const block = findOrCreateBlock('thinking')
-              block.content += delta.reasoning_content
-              block.status = 'streaming'
+              assistantMessage.reasoningContent = (assistantMessage.reasoningContent ?? '') + delta.reasoning_content
+              findOrCreateBlock(assistantMessage, 'thinking').content += delta.reasoning_content
             }
-            // Parse content into a main_text block
             if (delta.content) {
-              assistantMsg.content += delta.content
-              const block = findOrCreateBlock('main_text')
-              block.content += delta.content
-              block.status = 'streaming'
+              assistantMessage.content += delta.content
+              findOrCreateBlock(assistantMessage, 'main_text').content += delta.content
             }
-            // Parse usage from the final frame
-            if (delta.usage) {
-              assistantMsg.usage = {
-                prompt_tokens: delta.usage.prompt_tokens,
-                completion_tokens: delta.usage.completion_tokens,
-                total_tokens: delta.usage.total_tokens,
-              }
-              assistantMsg.tokens = {
-                input: delta.usage.prompt_tokens,
-                output: delta.usage.completion_tokens,
-              }
-            }
-          } catch { /* skip malformed */ }
+            if (delta.usage) assistantMessage.usage = delta.usage
+          } catch {
+            // Ignore malformed event frames and continue consuming the stream.
+          }
+        }
+
+        if (Date.now() - lastPersistAt > 400 && activeChatId.value) {
+          appStore.updateMessage(activeChatId.value, assistantMessage)
+          lastPersistAt = Date.now()
         }
       }
 
-      // Finalize all blocks
-      for (const block of assistantMsg.blocks ?? []) {
-        if (block.status === 'streaming') {
-          block.status = 'success'
-        }
+      for (const block of assistantMessage.blocks) {
+        if (block.status === 'streaming') block.status = 'success'
       }
-
-      assistantMsg.status = 'complete'
-    } catch (err) {
-      if ((err as Error).name === 'AbortError') {
-        assistantMsg.status = 'stopped'
-        if (!assistantMsg.content) assistantMsg.content = '_生成已停止。_'
-        for (const block of assistantMsg.blocks ?? []) {
+      assistantMessage.status = 'complete'
+    } catch (error) {
+      if ((error as Error).name === 'AbortError') {
+        assistantMessage.status = 'stopped'
+        for (const block of assistantMessage.blocks) {
           if (block.status === 'streaming') block.status = 'success'
         }
       } else {
-        assistantMsg.status = 'error'
-        assistantMsg.error = (err as Error).message
-        assistantMsg.content = `请求失败：${(err as Error).message}`
-        const errorBlock: MessageBlock = {
-          id: `block-err-${Date.now()}`,
+        const message = error instanceof Error ? error.message : String(error)
+        assistantMessage.status = 'error'
+        assistantMessage.error = message
+        assistantMessage.blocks.push({
+          id: createId('block-error'),
           type: 'error',
-          content: (err as Error).message,
+          content: message,
           status: 'error',
-          createdAt: Date.now(),
-        }
-        if (!assistantMsg.blocks) assistantMsg.blocks = []
-        assistantMsg.blocks.push(errorBlock)
+          createdAt: timestamp(),
+        })
       }
     } finally {
-      assistantMsg.loading = false
+      assistantMessage.loading = false
       generating.value = false
       abortController.value = null
-      // Persist to appStore
-      if (activeChatId.value) {
-        appStore.updateMessage(activeChatId.value, assistantMsg)
-      }
+      if (activeChatId.value) appStore.updateMessage(activeChatId.value, assistantMessage)
     }
   }
 
-  // ─── Send Message ───
   async function sendMessage() {
     if (!canSend.value) return
-    if (!activeChatId.value) {
-      newConversation()
-    }
-    const topicId = activeChatId.value!
+    if (!activeChatId.value) newConversation()
+    const topicId = activeChatId.value
+    if (!topicId) return
 
-    const content = draft.value.trim() ||
-      `请分析附件：${attachments.value.map(f => f.name).join('、')}`
-
-    const now = new Date().toISOString()
-
-    // Create user message
-    const userMsg: ChatMessage = {
-      id: `msg-${Date.now()}`,
+    const content = draft.value.trim() || `请分析附件：${attachments.value.map(file => file.name).join('、')}`
+    const createdAt = timestamp()
+    const userMessage: ChatMessage = {
+      id: createId('message'),
       topicId,
       role: 'user',
       content,
-      time: now,
-      createdAt: now,
+      createdAt,
       status: 'complete',
-      blocks: [
-        {
-          id: `block-${Date.now()}`,
-          type: 'main_text',
-          content,
-          status: 'success',
-          createdAt: Date.now(),
-        },
-      ],
+      parentBranchId: replyingToMsgId.value ?? undefined,
+      blocks: [{
+        id: createId('block'),
+        type: 'main_text',
+        content,
+        status: 'success',
+        createdAt,
+      }],
     }
-
-    // Record parent branch index if replying to a specific message
-    if (replyingToMsgId.value) {
-      userMsg.parentBranchIndex = replyingToMsgId.value as number
-    }
-
-    appStore.addMessage(topicId, userMsg)
-    messages.value = [...messages.value, userMsg]
-
-    // Clear input
-    draft.value = ''
-    attachments.value = []
-    replyingTo.value = ''
-    replyingToMsgId.value = null
-    uiStore.saving = true
-
-    // Create assistant placeholder
-    const assistantMsg: ChatMessage = {
-      id: `msg-${Date.now() + 1}`,
+    const assistantMessage: ChatMessage = {
+      id: createId('message'),
       topicId,
       role: 'assistant',
-      model: uiStore.selectedModel?.name,
       content: '',
-      reasoningContent: '',
-      time: now,
-      createdAt: now,
+      createdAt,
       status: 'sending',
       loading: true,
       blocks: [],
     }
-    appStore.addMessage(topicId, assistantMsg)
-    messages.value = [...messages.value, assistantMsg]
 
-    await streamChat(assistantMsg)
+    appStore.addMessage(topicId, userMessage)
+    appStore.addMessage(topicId, assistantMessage)
+    messages.value = [...messages.value, userMessage, assistantMessage]
+    draft.value = ''
+    attachments.value = []
+    replyingTo.value = ''
+    replyingToMsgId.value = null
 
-    // Auto-rename topic if it's the first message
+    await streamChat(assistantMessage)
+
     const topic = appStore.topicById(topicId)
-    if (topic && !topic.isNameManuallyEdited && topic.messages.length <= 2) {
-      const title = content.slice(0, 30) + (content.length > 30 ? '...' : '')
-      appStore.renameTopic(topicId, title)
+    if (topic && appStore.settings.enableTopicNaming && !topic.isNameManuallyEdited && topic.messages.length <= 2) {
+      appStore.renameTopic(topicId, content.length > 30 ? `${content.slice(0, 30)}...` : content)
     }
-
-    uiStore.saving = false
   }
 
   function stopGeneration() {
     abortController.value?.abort()
   }
 
-  // ─── Message Actions ───
-  function copyMessage(msg: ChatMessage) {
-    navigator.clipboard.writeText(msg.content).then(
+  function copyMessage(message: ChatMessage) {
+    void navigator.clipboard.writeText(message.content).then(
       () => uiStore.showToast('消息已复制'),
       () => uiStore.showToast('浏览器未授予剪贴板权限'),
     )
   }
 
-  function rateMessage(msg: ChatMessage, rating: 'up' | 'down') {
-    msg.rating = msg.rating === rating ? '' : rating
-    if (activeChatId.value) appStore.updateMessage(activeChatId.value, msg)
-    uiStore.showToast(msg.rating ? '反馈已记录' : '反馈已取消')
+  function rateMessage(message: ChatMessage, rating: 'up' | 'down') {
+    message.rating = message.rating === rating ? '' : rating
+    if (activeChatId.value) appStore.updateMessage(activeChatId.value, message)
+    uiStore.showToast(message.rating ? '反馈已记录' : '反馈已取消')
   }
 
-  function regenerate(msg: ChatMessage) {
-    msg.branches = (msg.branches ?? 1) + 1
-    msg.activeBranch = msg.branches
-    if (activeChatId.value) appStore.updateMessage(activeChatId.value, msg)
-    uiStore.showToast('已创建新的回复分支')
-    // Re-stream from the user message before this one
-    const idx = messages.value.findIndex(m => m.id === msg.id)
-    if (idx > 0) {
-      const userMsg = messages.value[idx - 1]
-      // Reset assistant message
-      msg.content = ''
-      msg.reasoningContent = ''
-      msg.status = 'sending'
-      msg.loading = true
-      msg.error = undefined
-      msg.blocks = []
-      messages.value = [...messages.value]
-      // Re-stream
-      abortController.value = new AbortController()
-
-      // Gather provider info
-      const selectedModel = uiStore.selectedModel
-      const providers = appStore.providers
-      const provider = providers.find(p =>
-        p.models?.some(m => m.id === selectedModel?.id) ||
-        p.id === selectedModel?.id?.split('-')[0],
-      )
-
-      const params: ChatRequestParams = {
-        messages: messages.value
-          .slice(0, idx)
-          .filter(m => m.status === 'complete' || m.status === 'stopped')
-          .map(m => ({ role: m.role, content: m.content })),
-        model: selectedModel?.id ?? 'deepseek-chat',
-        signal: abortController.value.signal,
-        ...(provider?.apiHost && provider?.apiKey && {
-          provider: { apiHost: provider.apiHost, apiKey: provider.apiKey },
-        }),
-      }
-      generating.value = true
-
-      // Helper for block management
-      function findOrCreateBlock(type: MessageBlock['type']): MessageBlock {
-        let block = (msg.blocks ?? []).find(b => b.type === type)
-        if (!block) {
-          block = {
-            id: `block-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-            type,
-            content: '',
-            status: 'streaming',
-            createdAt: Date.now(),
-          }
-          if (!msg.blocks) msg.blocks = []
-          msg.blocks.push(block)
-        }
-        return block
-      }
-
-      chatApi.chatStream(params).then(async (stream) => {
-        const reader = stream.getReader()
-        const decoder = new TextDecoder()
-        let buffer = ''
-        try {
-          while (true) {
-            const { done, value } = await reader.read()
-            if (done) break
-            buffer += decoder.decode(value, { stream: true })
-            const lines = buffer.split('\n')
-            buffer = lines.pop() ?? ''
-            for (const line of lines) {
-              const trimmed = line.trim()
-              if (!trimmed.startsWith('data: ')) continue
-              const json = trimmed.slice(6)
-              if (json === '[DONE]') continue
-              try {
-                const delta = JSON.parse(json) as ChatStreamDelta
-                if (delta.reasoning_content) {
-                  msg.reasoningContent = (msg.reasoningContent ?? '') + delta.reasoning_content
-                  const block = findOrCreateBlock('thinking')
-                  block.content += delta.reasoning_content
-                  block.status = 'streaming'
-                }
-                if (delta.content) {
-                  msg.content += delta.content
-                  const block = findOrCreateBlock('main_text')
-                  block.content += delta.content
-                  block.status = 'streaming'
-                }
-                if (delta.usage) {
-                  msg.usage = {
-                    prompt_tokens: delta.usage.prompt_tokens,
-                    completion_tokens: delta.usage.completion_tokens,
-                    total_tokens: delta.usage.total_tokens,
-                  }
-                  msg.tokens = {
-                    input: delta.usage.prompt_tokens,
-                    output: delta.usage.completion_tokens,
-                  }
-                }
-              } catch { /* skip */ }
-            }
-          }
-          for (const block of msg.blocks ?? []) {
-            if (block.status === 'streaming') block.status = 'success'
-          }
-          msg.status = 'complete'
-        } catch (err) {
-          if ((err as Error).name === 'AbortError') {
-            msg.status = 'stopped'
-            for (const block of msg.blocks ?? []) {
-              if (block.status === 'streaming') block.status = 'success'
-            }
-          } else {
-            msg.status = 'error'
-            msg.error = (err as Error).message
-            const errorBlock: MessageBlock = {
-              id: `block-err-${Date.now()}`,
-              type: 'error',
-              content: (err as Error).message,
-              status: 'error',
-              createdAt: Date.now(),
-            }
-            if (!msg.blocks) msg.blocks = []
-            msg.blocks.push(errorBlock)
-          }
-        } finally {
-          msg.loading = false
-          generating.value = false
-          abortController.value = null
-          if (activeChatId.value) appStore.updateMessage(activeChatId.value, msg)
-        }
-      })
-    }
+  async function regenerate(message: ChatMessage) {
+    if (message.role !== 'assistant' || !activeChatId.value || generating.value) return
+    const index = messages.value.findIndex(candidate => candidate.id === message.id)
+    if (index < 1) return
+    message.branches = (message.branches ?? 1) + 1
+    message.activeBranch = message.branches
+    message.content = ''
+    message.reasoningContent = undefined
+    message.error = undefined
+    message.blocks = []
+    message.status = 'sending'
+    message.loading = true
+    await streamChat(message, messages.value.slice(0, index))
   }
 
-  function branchFrom(msg: ChatMessage) {
-    replyingTo.value = msg.content.slice(0, 42)
-    replyingToMsgId.value = msg.id
+  function branchFrom(message: ChatMessage) {
+    replyingTo.value = message.content.slice(0, 42)
+    replyingToMsgId.value = message.id
     uiStore.showToast('下一条消息将在新分支中发送')
   }
 
-  function editMessage(msg: ChatMessage) {
-    draft.value = msg.content
+  function editMessage(message: ChatMessage) {
+    draft.value = message.content
     replyingTo.value = '编辑历史消息后重新发送'
+    replyingToMsgId.value = message.id
   }
 
-  // ─── Search Messages ───
   function searchMessages(query: string): SearchResult[] {
-    const q = query.trim().toLowerCase()
-    if (!q) return []
+    const normalized = query.trim().toLowerCase()
+    if (!normalized) return []
     const results: SearchResult[] = []
     for (const topic of appStore.topics) {
-      for (const msg of topic.messages) {
-        if (msg.content && msg.content.toLowerCase().includes(q)) {
+      for (const message of topic.messages) {
+        if (message.content.toLowerCase().includes(normalized)) {
           results.push({
             topicId: topic.id,
             topicName: topic.name,
-            messageId: msg.id,
-            content: msg.content,
-            time: msg.time,
+            messageId: message.id,
+            content: message.content,
+            time: message.createdAt,
           })
           if (results.length >= 50) return results
         }
@@ -580,160 +348,103 @@ export const useChatStore = defineStore('chat', () => {
     return results
   }
 
-  // ─── Export Topic as Markdown ───
   function exportTopicMarkdown(id: string): string {
     const topic = appStore.topicById(id)
     if (!topic) {
       uiStore.showToast('未找到对话')
       return ''
     }
-
-    const lines: string[] = []
-    lines.push(`# ${topic.name}`)
-    lines.push('')
-    lines.push(`> 导出时间：${new Date().toLocaleString('zh-CN')}`)
-    if (topic.model) lines.push(`> 模型：${topic.model}`)
-    lines.push('')
-
-    for (const msg of topic.messages) {
-      const role = msg.role === 'user' ? '🧑 用户' : msg.role === 'assistant' ? '🤖 助手' : '系统'
-      const time = msg.time ? new Date(msg.time).toLocaleString('zh-CN') : ''
-      lines.push(`## ${role}${time ? ` · ${time}` : ''}`)
-      lines.push('')
-      lines.push(msg.content || '_(空消息)_')
-      if (msg.reasoningContent) {
-        lines.push('')
-        lines.push('<details><summary>推理过程</summary>')
-        lines.push('')
-        lines.push(msg.reasoningContent)
-        lines.push('')
-        lines.push('</details>')
-      }
-      lines.push('')
-      lines.push('---')
-      lines.push('')
+    const lines = [`# ${topic.name}`, '', `> 导出时间：${new Date().toLocaleString('zh-CN')}`, '']
+    for (const message of topic.messages) {
+      const role = message.role === 'user' ? '用户' : message.role === 'assistant' ? '助手' : '系统'
+      lines.push(`## ${role} · ${new Date(message.createdAt).toLocaleString('zh-CN')}`, '', message.content || '_(空消息)_')
+      if (message.reasoningContent) lines.push('', '<details><summary>推理过程</summary>', '', message.reasoningContent, '', '</details>')
+      lines.push('', '---', '')
     }
-
     const markdown = lines.join('\n')
-
-    // Trigger download
-    const blob = new Blob([markdown], { type: 'text/markdown;charset=utf-8' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `${topic.name.replace(/[<>:"/\\|?*]/g, '_')}.md`
-    a.click()
+    const url = URL.createObjectURL(new Blob([markdown], { type: 'text/markdown;charset=utf-8' }))
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `${topic.name.replace(/[<>:"/\\|?*]/g, '_')}.md`
+    link.click()
     URL.revokeObjectURL(url)
-
     uiStore.showToast('对话已导出为 Markdown')
     return markdown
   }
 
-  // ─── Attachments ───
   function addFiles(files: File[]) {
     const max = 6
     const remaining = max - attachments.value.length
-    files.slice(0, remaining).forEach(file => {
+    for (const file of files.slice(0, remaining)) {
       attachments.value.push({
-        id: `${Date.now()}-${Math.random()}`,
+        id: createId('file'),
         name: file.name,
-        size: file.size < 1024 * 1024
-          ? `${Math.max(1, Math.round(file.size / 1024))} KB`
-          : `${(file.size / 1024 / 1024).toFixed(1)} MB`,
+        size: file.size < 1024 * 1024 ? `${Math.max(1, Math.round(file.size / 1024))} KB` : `${(file.size / 1024 / 1024).toFixed(1)} MB`,
+        type: file.type,
       })
-    })
-    if (files.length > remaining) {
-      uiStore.showToast(`最多 ${max} 个附件，已忽略 ${files.length - remaining} 个`)
-    } else {
-      uiStore.showToast(`${files.length} 个文件已加入上下文`)
     }
+    uiStore.showToast(files.length > remaining ? `最多 ${max} 个附件，已忽略 ${files.length - remaining} 个` : `${files.length} 个文件已加入上下文`)
   }
 
-  function removeAttachment(file: Attachment) {
-    const index = attachments.value.findIndex(a => a.id === file.id)
-    if (index === -1) return
-    const removed = attachments.value.splice(index, 1)[0]
-    uiStore.showToast('附件已移除', () => {
-      attachments.value.splice(index, 0, removed)
-    })
+  function removeAttachment(file: Attachment | undefined) {
+    if (!file) return
+    const index = attachments.value.findIndex(candidate => candidate.id === file.id)
+    if (index < 0) return
+    const [removed] = attachments.value.splice(index, 1)
+    if (!removed) return
+    uiStore.showToast('附件已移除', () => attachments.value.splice(index, 0, removed))
   }
 
-  // ─── UI Delegates (for component compat) ───
   function toggleFocusMode() { uiStore.toggleFocusMode() }
   function toggleInspector() { uiStore.toggleInspector() }
   function closeInspector() { uiStore.closeInspector() }
   function closeDrawers() { uiStore.closeDrawers() }
   function showToast(message: string, undo?: () => void) { uiStore.showToast(message, undo) }
-  function selectModel(model: typeof uiStore.selectedModel) { uiStore.selectModel(model) }
-  function runCommand(cmd: typeof uiStore.commands[number]) {
-    if (cmd.action === 'new') {
+  function selectModel(model: Model | null) { if (model) uiStore.selectModel(model) }
+  function runCommand(command: typeof uiStore.commands[number]) {
+    if (command.action === 'new') {
       newConversation()
       uiStore.modal = ''
       return
     }
-    if (cmd.action === 'export') {
-      exportTopicMarkdown(activeChatId.value ?? '')
-      uiStore.modal = ''
-      return
-    }
-    uiStore.runCommand(cmd)
+    uiStore.runCommand(command)
   }
   function savePrompt() { uiStore.savePrompt() }
   function handleResize() { uiStore.handleResize() }
   function undo() { uiStore.undo() }
 
-  // ─── Import/Export delegates ───
   async function importData(file: File) {
     const result = await appStore.importData(file)
-    if (result.ok) {
-      uiStore.showToast('数据导入成功')
-      if (appStore.sortedTopics.length > 0) {
-        openConversation(appStore.sortedTopics[0]!.id)
-      }
-    } else {
+    if (!result.ok) {
       uiStore.showToast(`导入失败：${result.error}`)
+      return
     }
+    uiStore.initSelectedModel()
+    if (appStore.sortedTopics.length > 0) openConversation(appStore.sortedTopics[0]!.id)
+    const report = result.report
+    const summary = `已导入 ${report.providerCount} 个 Provider、${report.assistantCount} 个 Assistant、${report.topicCount} 个 Topic`
+    uiStore.showToast(report.warnings.length > 0 ? `${summary}\n${report.warnings.join('\n')}` : summary)
   }
 
   function exportData() {
-    appStore.exportData({ includeApiKeys: false })
-    uiStore.showToast('数据已导出')
+    const result = appStore.exportData({ includeApiKeys: false })
+    uiStore.showToast(result.ok ? '数据已导出' : `导出已阻止：\n${result.errors.join('\n')}`)
   }
 
-  // ─── Draft persistence ───
-  watch(draft, (val) => {
-    localStorage.setItem('orbit-draft', val)
-  })
+  watch(draft, value => localStorage.setItem('orbit-draft', value))
 
-  // ─── Expose ───
   return {
-    // State (own)
     activeChatId, messages, draft, replyingTo, replyingToMsgId, generating, attachments,
-    // State (forwarded from uiStore as computeds)
-    sidebarOpen, focusMode, inspectorVisible, inspectorOpen,
-    modal, toast, online, saving, nearBottom, commandQuery,
-    promptDraft, selectedModel, workspaces, models,
-    promptPresets, commands, filteredCommands, filteredCommandChats,
-    searchResults,
-    // Getters
+    sidebarOpen, focusMode, inspectorVisible, inspectorOpen, modal, toast, undoAction, online, saving, saveError, nearBottom,
+    commandQuery, promptDraft, selectedModel,
+    workspaces: uiStore.workspaces, models: uiStore.models, promptPresets: uiStore.promptPresets,
+    commands: uiStore.commands, filteredCommands: uiStore.filteredCommands, filteredCommandChats, searchResults,
+    tabletBreakpoint: uiStore.tabletBreakpoint, mobileBreakpoint: uiStore.mobileBreakpoint,
     currentChat, chats, canSend,
-    // Conversation
     openConversation, newConversation, deleteConversation, clearConversation, renameTopic, togglePin, initApp,
-    // Messaging
-    sendMessage, stopGeneration, streamChat,
-    copyMessage, rateMessage, regenerate, branchFrom, editMessage,
-    searchMessages, exportTopicMarkdown,
-    // Attachments
-    addFiles, removeAttachment,
-    // UI delegates
-    toggleFocusMode, toggleInspector, closeInspector, closeDrawers,
-    showToast, selectModel, runCommand, savePrompt, handleResize, undo,
-    // Import/Export
-    importData, exportData,
-    // Compat setters
-    setSidebarOpen, setFocusMode, setInspectorOpen, setInspectorVisible,
-    setModal, setCommandQuery, setPromptDraft, setNearBottom,
-    // Token estimation helper exposed for components
-    estimateTokens,
+    sendMessage, stopGeneration, streamChat, copyMessage, rateMessage, regenerate, branchFrom, editMessage,
+    searchMessages, exportTopicMarkdown, addFiles, removeAttachment,
+    toggleFocusMode, toggleInspector, closeInspector, closeDrawers, showToast, selectModel, runCommand, savePrompt, handleResize, undo,
+    importData, exportData, estimateTokens,
   }
 })

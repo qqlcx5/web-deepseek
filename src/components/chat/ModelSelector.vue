@@ -23,9 +23,9 @@ const modelGroups = computed(() => {
     const enabledModels = provider.models.filter(m => m.enabled)
     if (enabledModels.length === 0) continue
 
-    if (!groups[provider.name]) groups[provider.name] = []
+    const group = groups[provider.name] ?? (groups[provider.name] = [])
     for (const model of enabledModels) {
-      groups[provider.name].push({
+      group.push({
         id: model.id,
         name: model.name,
         providerName: provider.name,

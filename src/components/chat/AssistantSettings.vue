@@ -11,6 +11,9 @@ const uiStore = useUiStore()
 const expandedId = ref<string | null>(null)
 const editingAssistant = ref<Assistant | null>(null)
 const isNew = ref(false)
+const deletingAssistantId = ref<string | null>(null)
+const migrationTargetId = ref('')
+const deleteError = ref('')
 
 const availableModels = computed(() =>
   appStore.providers
@@ -29,13 +32,17 @@ function startEdit(assistant: Assistant) {
 }
 
 function startNew() {
+  const createdAt = new Date().toISOString()
   editingAssistant.value = {
-    id: `assistant-${Date.now()}`,
+    id: `assistant-${crypto.randomUUID()}`,
     name: '新助手',
     prompt: '',
     enabled: true,
+    isDefault: false,
     emoji: '🤖',
     temperature: 0.7,
+    createdAt,
+    updatedAt: createdAt,
   }
   expandedId.value = editingAssistant.value.id
   isNew.value = true
@@ -68,13 +75,42 @@ function saveEdit() {
   isNew.value = false
 }
 
+const migrationTargets = computed(() => appStore.assistants.filter(assistant => assistant.id !== deletingAssistantId.value))
+
 function deleteAssistant(id: string) {
-  appStore.removeAssistant(id)
-  uiStore.showToast('助手已删除')
-  if (expandedId.value === id) {
+  const topicCount = appStore.topicCountByAssistant(id)
+  if (topicCount === 0) {
+    const result = appStore.removeAssistant(id)
+    if (result.ok) uiStore.showToast('助手已删除')
+    else uiStore.showToast(result.error ?? '删除失败')
+    return
+  }
+  deletingAssistantId.value = id
+  migrationTargetId.value = migrationTargets.value[0]?.id ?? ''
+  deleteError.value = ''
+}
+
+function completeAssistantDelete(cascade: boolean) {
+  if (!deletingAssistantId.value) return
+  const result = appStore.removeAssistant(deletingAssistantId.value, cascade
+    ? { cascade: true }
+    : { targetAssistantId: migrationTargetId.value })
+  if (!result.ok) {
+    deleteError.value = result.error ?? '删除失败'
+    return
+  }
+  if (expandedId.value === deletingAssistantId.value) {
     expandedId.value = null
     editingAssistant.value = null
   }
+  deletingAssistantId.value = null
+  uiStore.showToast(cascade ? '助手及其 Topic 已删除' : 'Topic 已迁移，助手已删除')
+}
+
+function setDefault(assistant: Assistant) {
+  if (assistant.isDefault) return
+  appStore.updateAssistant(assistant.id, { isDefault: true })
+  uiStore.showToast(`已将「${assistant.name}」设为默认助手`)
 }
 
 function close() {
@@ -101,6 +137,24 @@ function close() {
     </header>
 
     <div class="dialog-body">
+      <div v-if="deletingAssistantId" class="delete-confirm" role="alertdialog" aria-modal="true">
+        <div class="delete-confirm-copy">
+          <strong>处理关联 Topic</strong>
+          <span>该 Assistant 仍有关联 Topic。迁移可保留对话；级联删除不可撤销。</span>
+        </div>
+        <select v-model="migrationTargetId" class="field-input migration-select" aria-label="迁移目标 Assistant">
+          <option v-for="assistant in migrationTargets" :key="assistant.id" :value="assistant.id">
+            {{ assistant.name }}
+          </option>
+        </select>
+        <div v-if="deleteError" class="field-error">{{ deleteError }}</div>
+        <div class="delete-actions">
+          <button class="secondary" @click="deletingAssistantId = null">取消</button>
+          <button class="primary" :disabled="!migrationTargetId" @click="completeAssistantDelete(false)">迁移并删除</button>
+          <button class="danger-primary" @click="completeAssistantDelete(true)">级联删除</button>
+        </div>
+      </div>
+
       <div class="assistant-list scroll">
         <div
           v-for="assistant in appStore.assistants"
@@ -118,6 +172,14 @@ function close() {
                 <span v-if="assistant.isDefault"> · 默认</span>
               </div>
             </div>
+            <button
+              v-if="!assistant.isDefault"
+              class="icon-btn"
+              data-tip="设为默认"
+              @click.stop="setDefault(assistant)"
+            >
+              <Icon icon="tabler:star" width="14" />
+            </button>
             <button
               v-if="!assistant.isDefault"
               class="icon-btn danger-btn"
@@ -238,6 +300,13 @@ function close() {
 .secondary { display: inline-flex; min-height: 30px; align-items: center; justify-content: center; gap: 5px; padding: 0 10px; color: var(--text-secondary); background: var(--surface); border: 1px solid var(--line-strong); border-radius: 5px; font-size: 11px; font-weight: 600; cursor: pointer; }
 .secondary:hover { background: var(--surface-3); }
 
+.delete-confirm { display: grid; grid-template-columns: minmax(0, 1fr) 130px; gap: 8px; margin-bottom: 10px; padding: 10px; background: color-mix(in srgb, var(--danger) 8%, var(--surface)); border: 1px solid color-mix(in srgb, var(--danger) 30%, var(--line)); border-radius: 6px; }
+.delete-confirm-copy { display: flex; flex-direction: column; gap: 3px; color: var(--text); font-size: 10px; }
+.delete-confirm-copy span { color: var(--text-secondary); line-height: 1.5; }
+.migration-select { min-width: 0; align-self: center; }
+.delete-actions { display: flex; grid-column: 1 / -1; justify-content: flex-end; gap: 6px; }
+.danger-primary { display: inline-flex; min-height: 30px; align-items: center; justify-content: center; padding: 0 10px; color: white; background: var(--danger); border: 0; border-radius: 5px; font-size: 11px; font-weight: 600; cursor: pointer; }
+.field-error { grid-column: 1 / -1; color: var(--danger); font-size: 10px; }
 .empty-hint { text-align: center; padding: 24px 0; color: var(--faint); font-size: 11px; }
 
 .icon-btn { display: inline-flex; width: 34px; height: 34px; flex: 0 0 34px; align-items: center; justify-content: center; border-radius: 6px; color: var(--muted); background: transparent; border: 0; cursor: pointer; transition: background 140ms, color 140ms; }

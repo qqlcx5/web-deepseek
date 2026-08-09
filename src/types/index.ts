@@ -1,25 +1,18 @@
-// ─── Orbit Chat Unified Type System ───────────────────────────────────────────
-// Single type source for app store / chat store / ui store / all components.
-
-// ─── Provider & Model ─────────────────────────────────────────────────────────
+// ─── Orbit Chat Core Data Contract ────────────────────────────────────────────
+// Runtime state and IndexedDB persistence use these normalized entities only.
 
 export interface Provider {
   id: string
   name: string
   apiHost: string
   apiKey?: string
-  apiPath?: string
-  apiVersion?: string
   models: ModelInfo[]
   enabled: boolean
-  isSystem?: boolean
 }
 
 export interface ModelInfo {
   id: string
   name: string
-  providerId?: string
-  provider?: string
   group?: string
   supportedTextDelta?: boolean
   description?: string
@@ -28,69 +21,38 @@ export interface ModelInfo {
   enabled: boolean
 }
 
-// ─── Assistant ────────────────────────────────────────────────────────────────
-
 export interface Assistant {
   id: string
   name: string
-  description?: string
   prompt: string
+  enabled: boolean
+  isDefault: boolean
+  emoji?: string
+  description?: string
+  model?: string
   temperature?: number
   topP?: number
   maxTokens?: number
-  model?: string
-  avatar?: string
-  enabled: boolean
-  isDefault?: boolean
-  tags?: string[]
-  emoji?: string
-  group?: string
-  stream?: boolean
-  contextManagement?: ContextManagement
-  customParams?: Record<string, unknown>
-  createdAt?: string
-  updatedAt?: string
-  // Cherry Studio extended fields
-  regularPhrases?: unknown[]
-  settings?: Record<string, unknown>
-  defaultModel?: { id: string; provider: string; name: string; group?: string }
   enableWebSearch?: boolean
-  mcpServers?: unknown[]
-  knowledgeRecognition?: unknown
+  createdAt: string
+  updatedAt: string
 }
-
-export interface ContextManagement {
-  strategy: string
-  maxMessages?: number
-  maxTokens?: number
-}
-
-// ─── Topic (conversation) ─────────────────────────────────────────────────────
 
 export interface Topic {
   id: string
   assistantId: string
   name: string
   messages: ChatMessage[]
-  prompt?: string
-  temperature?: number
-  topP?: number
-  maxTokens?: number
-  model?: string
-  isNameManuallyEdited?: boolean
-  pinned?: boolean
-  favorite?: boolean
-  archived?: boolean
-  tags?: string[]
-  createdAt?: string
-  updatedAt?: string
+  isNameManuallyEdited: boolean
+  pinned: boolean
+  createdAt: string
+  updatedAt: string
 }
 
-// ─── Message ──────────────────────────────────────────────────────────────────
-
 export type MessageRole = 'user' | 'assistant' | 'system'
-
 export type MessageStatus = 'sending' | 'streaming' | 'complete' | 'error' | 'stopped'
+export type MessageBlockType = 'main_text' | 'thinking' | 'error' | 'citation' | 'tool' | 'unknown'
+export type MessageBlockStatus = 'streaming' | 'success' | 'error'
 
 export interface Source {
   name: string
@@ -111,75 +73,99 @@ export interface Attachment {
   url?: string
 }
 
-/**
- * Message block — corresponds to Cherry Studio's message_blocks in indexedDB.
- * type ∈ 'main_text' | 'thinking' | 'error' | 'citation' | 'tool' | 'unknown'
- */
+export interface TokenUsage {
+  prompt_tokens?: number
+  completion_tokens?: number
+  total_tokens?: number
+}
+
 export interface MessageBlock {
-  id?: string
-  type: 'main_text' | 'thinking' | 'error' | 'citation' | 'tool' | 'unknown'
+  id: string
+  type: MessageBlockType
   content: string
-  status?: string
-  createdAt?: number
+  status: MessageBlockStatus
+  createdAt: string
   citationReferences?: unknown[]
 }
 
-/**
- * Unified Message type — both runtime and persistence structure.
- */
 export interface ChatMessage {
-  id: string | number
-  topicId?: string
+  id: string
+  topicId: string
   role: MessageRole
   content: string
-  time: string
+  createdAt: string
+  status: MessageStatus
   model?: string
   rating?: '' | 'up' | 'down'
   branches?: number
   activeBranch?: number
   loading?: boolean
   error?: string
-  status?: MessageStatus
   reasoningContent?: string
   sources?: Source[]
   artifact?: Artifact
   attachments?: Attachment[]
-  tokens?: {
-    input?: number
-    output?: number
-  }
-  askId?: string
-  branchIndex?: number
-  parentBranchIndex?: number
-  createdAt?: string
-  // Cherry Studio extended fields
-  blocks?: MessageBlock[]
-  modelId?: string
-  usage?: {
-    prompt_tokens?: number
-    completion_tokens?: number
-    total_tokens?: number
-  }
-  mentions?: unknown[]
+  parentBranchId?: string
+  blocks: MessageBlock[]
+  usage?: TokenUsage
 }
 
-// ─── Chat list item (sidebar) ─────────────────────────────────────────────────
+export interface Settings {
+  language: 'zh-CN' | 'en-US'
+  theme: 'light' | 'dark' | 'auto'
+  fontSize: number
+  sendShortcut: 'Enter' | 'Ctrl+Enter' | 'Shift+Enter'
+  autoScroll: boolean
+  autoCheckUpdate: boolean
+  messageStyle: 'plain' | 'bubble'
+  messageFont: 'system' | 'serif' | 'mono'
+  codeShowLineNumbers: boolean
+  codeWrappable: boolean
+  codeCollapsible: boolean
+  foldDisplayMode: 'full' | 'compact'
+  confirmDeleteMessage: boolean
+  confirmRegenerateMessage: boolean
+  showTokens: boolean
+  showMessageDivider: boolean
+  showMessageOutline: boolean
+  messageNavigation: boolean
+  enableTopicNaming: boolean
+  pinTopicsToTop: boolean
+  showTopics: boolean
+  showTopicTime: boolean
+  showInputEstimatedTokens: boolean
+  pasteLongTextAsFile: boolean
+  pasteLongTextThreshold: number
+  renderInputMessageAsMarkdown: boolean
+  mathEngine: 'katex' | 'mathjax'
+  targetLanguage: string
+}
+
+/** The only persisted application payload. */
+export interface AppData {
+  version: number
+  providers: Provider[]
+  assistants: Assistant[]
+  topics: Topic[]
+  settings: Settings
+}
+
+// ─── UI Types ─────────────────────────────────────────────────────────────────
 
 export interface Chat {
   id: string
   title: string
   preview: string
-  pinned?: boolean
-  createdAt?: number
-  updatedAt?: number
-  messageCount?: number
+  pinned: boolean
+  createdAt: string
+  updatedAt: string
+  messageCount: number
 }
-
-// ─── Model (UI) ───────────────────────────────────────────────────────────────
 
 export interface Model {
   id: string
   name: string
+  providerId: string
   color: string
   description: string
   tags: string[]
@@ -198,8 +184,6 @@ export interface ModelListResponse {
   }>
 }
 
-// ─── Workspace ────────────────────────────────────────────────────────────────
-
 export interface Workspace {
   id: string
   name: string
@@ -207,7 +191,24 @@ export interface Workspace {
   count: number
 }
 
-// ─── Chat API Types (OpenAI-compatible) ───────────────────────────────────────
+export type ModalType = '' | 'command' | 'model' | 'prompt' | 'settings' | 'provider' | 'assistant'
+
+export interface Command {
+  title: string
+  description: string
+  icon: string
+  shortcut?: string
+  action: string
+}
+
+export interface PromptPreset {
+  name: string
+  value: string
+}
+
+export type ThemeMode = 'light' | 'dark' | 'auto'
+
+// ─── Chat API Types ───────────────────────────────────────────────────────────
 
 export interface ChatCompletionMessage {
   role: MessageRole
@@ -237,11 +238,7 @@ export interface ChatCompletionChunk {
     }
     finish_reason: string | null
   }>
-  usage?: {
-    prompt_tokens?: number
-    completion_tokens?: number
-    total_tokens?: number
-  }
+  usage?: TokenUsage
 }
 
 export interface ChatCompletionResponse {
@@ -254,98 +251,13 @@ export interface ChatCompletionResponse {
     message: ChatCompletionMessage
     finish_reason: string
   }>
-  usage?: {
-    prompt_tokens: number
-    completion_tokens: number
-    total_tokens: number
-  }
+  usage?: Required<TokenUsage>
 }
-
-// ─── AppData (persistence root) ───────────────────────────────────────────────
-
-export interface AppData {
-  version: number
-  providers: Provider[]
-  assistants: Assistant[]
-  topics: Topic[]
-  settings?: Settings
-  cherryData?: CherryData
-  compatZone?: Record<string, unknown>
-  messageBlocks?: Record<string, MessageBlock>
-}
-
-/**
- * Settings — compatible with Cherry Studio's 119 settings keys.
- * Common keys are explicitly declared; everything else goes through the index.
- */
-export interface Settings {
-  language?: string
-  theme?: 'light' | 'dark' | 'auto'
-  fontSize?: number
-  sendShortcut?: 'Enter' | 'Ctrl+Enter' | 'Shift+Enter'
-  maxContextLength?: number
-  autoScroll?: boolean
-  sendMessageShortcut?: string
-  messageStyle?: string
-  codeShowLineNumbers?: boolean
-  showTokens?: boolean
-  pinTopicsToTop?: boolean
-  confirmDeleteMessage?: boolean
-  [key: string]: unknown
-}
-
-// ─── UI Types ─────────────────────────────────────────────────────────────────
-
-export type ModalType = '' | 'command' | 'model' | 'prompt' | 'settings' | 'provider' | 'assistant'
-
-export interface Command {
-  title: string
-  description: string
-  icon: string
-  shortcut?: string
-  action: string
-}
-
-export interface PromptPreset {
-  name: string
-  value: string
-}
-
-export type ThemeMode = 'light' | 'dark' | 'auto'
-
-// ─── Stream delta ─────────────────────────────────────────────────────────────
 
 export interface ChatStreamDelta {
   id?: string
   content?: string
   reasoning_content?: string
   model?: string
-  usage?: {
-    prompt_tokens?: number
-    completion_tokens?: number
-    total_tokens?: number
-  }
+  usage?: TokenUsage
 }
-
-// ─── Re-export Cherry types ───────────────────────────────────────────────────
-
-export type {
-  CherryData,
-  CherryLocalStorage,
-  CherryPersist,
-  CherryLLMData,
-  CherryModelRef,
-  CherryProvider,
-  CherryModel,
-  CherryAssistantsData,
-  CherryAssistant,
-  CherryTopic,
-  CherryMessage,
-  CherryMessageBlock,
-  CherryIndexedDB,
-  CherrySettingEntry,
-  ParsedCherryData,
-} from './cherry-data'
-
-// Re-export types used by data-import for backward compat
-export type { MessageBlock as CherryMessageBlockCompat } from './cherry-data'

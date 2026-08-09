@@ -11,7 +11,7 @@ AIGC:
 
 # data.json 字段级 JSON Schema
 
-> 源文件: `/Users/another/Documents/OpenSource/web-deepseek/data.json` (3.0 MB)  
+> 源文件: `/Users/another/Documents/OpenSource/web-deepseek/data.json` (3.0 MB)
 > 导出版本: 5 | 实例数在每章节标题标注
 
 ---

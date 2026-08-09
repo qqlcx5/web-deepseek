@@ -1,317 +1,392 @@
----
-AIGC:
-    Label: "1"
-    ContentProducer: 001191440300708461136T1XGW3
-    ProduceID: d270bcd3df6a2cd27c2792fa9a0b45ef_cf82ba1a93e311f18e22525400f8a581
-    ReservedCode1: 0/9xQNVjIDmpRAbtxD4B/V7HCKV7LZYT5Q5aqeOPXK0m5KVlQjwx91k/ZqZmM3sH8rbBqVlZt+xMF9G7iF/02HcpZCRKvLt234rIkSLEq+uhXdaRdIffqr1/SXimDl+LwOvg/z5Mh3Ml1Dpr2ijRDapK7HCFbj24O/hkQbQSXHHSgMbiJPkzwW9axvE=
-    ContentPropagator: 001191440300708461136T1XGW3
-    PropagateID: d270bcd3df6a2cd27c2792fa9a0b45ef_cf82ba1a93e311f18e22525400f8a581
-    ReservedCode2: 0/9xQNVjIDmpRAbtxD4B/V7HCKV7LZYT5Q5aqeOPXK0m5KVlQjwx91k/ZqZmM3sH8rbBqVlZt+xMF9G7iF/02HcpZCRKvLt234rIkSLEq+uhXdaRdIffqr1/SXimDl+LwOvg/z5Mh3Ml1Dpr2ijRDapK7HCFbj24O/hkQbQSXHHSgMbiJPkzwW9axvE=
----
+# Orbit Chat 产品需求文档
 
+> 产品：Orbit Chat
+> 项目：`web-deepseek`
+> 文档版本：v2.0
+> 状态：实施基线
 
+## 1. 产品定位
 
-# Cherry Studio 产品功能需求文档 (PRD)
+Orbit Chat 是本地优先的多 Provider AI 对话应用。用户可以配置模型服务商、创建不同角色的 AI 助手、管理多话题会话，并在浏览器中保存、导入和导出自己的数据。
 
-> **方法论**：本文档从 `data.json`（3.0 MB，导出版本 5）的存储结构反向推导产品功能。
-> 每个存储节点（localStorage Key / indexedDB ObjectStore）对应一个功能模块，
-> 从字段定义、数据量、枚举值反推用户故事和功能规格。
-> 配套参考：`docs/data-json-schema.md`（字段级定义） / `docs/data-architecture.md`（架构分析）
+产品以“对话数据可控、Provider 可替换、状态可恢复”为核心，不复制外部应用的存储结构。Cherry Studio `data.json` 只是一种导入和导出交换格式，不参与应用运行时数据建模。
 
----
+## 2. 目标与边界
 
-## 1. 对话引擎（核心）
+### 2.1 产品目标
 
-### 1.1 功能概述
-多话题对话系统是 Cherry Studio 的核心模块。用户可在每个助手下创建多个话题（Topic），每个话题内含完整对话记录，支持流式消息生成和多种消息内容块类型。
+1. 用户可以配置多个 OpenAI-compatible Provider 和模型，并选择模型发起对话。
+2. 用户可以创建多个 Assistant，每个 Assistant 有独立提示词、模型和生成参数。
+3. 每个 Assistant 下可以创建、搜索、重命名、置顶和删除 Topic。
+4. 对话支持流式正文、思考内容、错误、引用和工具调用等内容块。
+5. 刷新页面后业务数据完整恢复；用户可导入 Cherry v5 文件或导出兼容 JSON。
+6. API Key 默认不写入导出文件。
 
-### 1.2 数据依据
+### 2.2 不在本期范围
 
-| 存储 | 字段 | 说明 |
-|------|------|------|
-| `indexedDB.topics` | `id`, `messages[]` | 43 个话题，41 个含消息，共 482 条 |
-| `indexedDB.message_blocks` | `id`, `messageId`, `type`, `content`, `status` | 657 个内容块，6 种类型 |
-| `Message` | `role`, `status`, `blocks[]`, `model`, `usage`, `mentions` | 11 个字段（见 schema §3.2） |
+- 服务端账户、云端同步和多人协作。
+- 多端冲突自动合并。
+- 模型调用的服务端密钥托管。
+- 将 Cherry 的知识库、MCP、绘图、笔记和小程序配置直接映射为 Orbit 功能。
+- 保留 Cherry 的 localStorage、多个 IndexedDB ObjectStore 或原始对象镜像。
 
-### 1.3 用户故事
-- 作为用户，我可以在助手下创建多个对话话题，每个话题独立保存历史
-- 作为用户，发送消息后我可以看到 AI 流式回复，包括思考过程（thinking）和最终回答
+## 3. 核心架构
 
-### 1.4 功能规格
+```text
+Cherry data.json v5
+  -> 导入解析和映射
+  -> AppData
+  -> Pinia appStore
+  -> IndexedDB
 
-| ID | 功能点 | 规格说明 |
-|----|--------|---------|
-| C-01 | 多话题管理 | 每个话题 `{id, title, messages[]}` 独立存储，支持创建/切换/删除 |
-| C-02 | 流式消息生成 | `message_blocks` 支持 `streaming` 状态，`supported_text_delta` 标记模型是否支持增量 |
-| C-03 | 消息状态追踪 | 三级状态：`pending` → `streaming`/`processing` → `success`/`error` |
-| C-04 | 多类型内容块 | 6 种类型：main_text / thinking / citation / error / tool / unknown |
-| C-05 | Token 用量统计 | 每条 assistant 消息记录 `usage: {prompt_tokens, completion_tokens, total_tokens}` |
-| C-07 | 话题置顶 | `pinned: boolean`，与 `settings.pinTopicsToTop` 联动 |
-| C-08 | 消息重发/重新生成 | `status: error` 的消息支持重新生成 |
+chatStore
+  -> 读取 appStore 的 Topic 和 Assistant
+  -> 请求 OpenAI-compatible API
+  -> 处理 SSE 流
+  -> 回写 appStore
 
-### 1.5 优先级：P0
-
----
-
-## 2. 多助手系统
-
-### 2.1 功能概述
-用户可创建多个 AI 助手，每个助手独立配置系统提示词、模型、上下文长度和温度等参数。每个助手拥有独立的话题列表。
-
-### 2.2 数据依据
-
-| 存储 | 字段 | 说明 |
-|------|------|------|
-| `assistants.defaultAssistant` | 完整的 Assistant 对象 | 默认助手 |
-| `assistants.assistants[]` | `{id, name, emoji, prompt, model, topics[], settings}` | 3 个助手，34 个 topic 引用 |
-| `Assistant.settings` | `{temperature, contextCount, streamOutput, ...}` | 10 个助手级参数 |
-
-### 2.3 用户故事
-- 作为用户，我可以创建多个不同用途的 AI 助手（如编程助手、写作助手），每个配置不同提示词和模型
-- 作为用户，我可以在对话过程中随时切换助手
-
-### 2.4 功能规格
-
-| ID | 功能点 | 规格说明 |
-|----|--------|---------|
-| A-01 | 助手 CRUD | 创建/编辑/删除助手，必填：`name`、`prompt`；选填：`emoji`、`model` |
-| A-02 | 默认助手 | `defaultAssistant` 字段记录当前默认，新会话自动使用 |
-| A-03 | 助手切换 | 界面支持在不同助手间切换，每个助手下话题独立 |
-| A-04 | 系统提示词 | `prompt: string`，支持 Markdown，所有该助手下的消息自动注入 |
-| A-05 | 温度控制 | `settings.temperature: 0-2`，`enableTemperature` 控制是否启用 |
-| A-06 | 上下文轮数 | `settings.contextCount: number`，控制发送给 LLM 的历史消息轮数 |
-| A-07 | 流式开关 | `settings.streamOutput: boolean` |
-| A-08 | 最大 Token | `settings.enableMaxTokens` + `settings.maxTokens` |
-| A-09 | 工具模式 | `settings.toolUseMode: "prompt"`，定义工具调用行为 |
-| A-10 | 推理深度 | `settings.reasoning_effort` / `qwenThinkMode`，针对特定模型 |
-| A-11 | 常用短语 | `regularPhrases: string[]`，快速输入预设文本 |
-| A-12 | 知识库联动 | `knowledgeRecognition: boolean`，启用时检索知识库 |
-| A-13 | 网络搜索联动 | `enableWebSearch: boolean`，启用时联网搜索 |
-
-### 2.5 优先级：P0
-
----
-
-## 3. 多模型 / Provider 管理
-
-### 3.1 功能概述
-统一的 LLM Provider 接入层，支持 OpenAI 兼容接口、Gemini 等 61 个预置 Provider（52 系统 + 9 用户自定义），用户可配置 API Key、自定义 API Host、管理模型列表。
-
-### 3.2 数据依据
-
-| 存储 | 字段 | 说明 |
-|------|------|------|
-| `llm.providers[]` | `{id, name, type, apiKey, apiHost, models[], enabled, isSystem}` | 61 个 Provider |
-| `llm.defaultModel` | `ModelRef` | 全局默认模型 |
-| `llm.topicNamingModel` | `ModelRef` | 话题自动命名模型 |
-| `llm.translateModel` | `ModelRef` | 翻译模型 |
-| `llm.quickAssistantModel` | `ModelRef` | 快捷助手模型 |
-| `ModelRef` | `{id, provider, name, group, supported_text_delta}` | 模型引用结构 |
-
-### 3.3 用户故事
-- 作为用户，我可以添加自定义 Provider（如 OpenAI 兼容 API），配置 API Key 和地址后使用其模型
-- 作为用户，我可以为不同场景（对话/翻译/话题命名）分别指定不同模型
-
-### 3.4 功能规格
-
-| ID | 功能点 | 规格说明 |
-|----|--------|---------|
-| P-01 | Provider 管理 | CRUD，字段：`name` / `type` / `apiKey` / `apiHost`；系统预置 `isSystem=true` 不可删除 |
-| P-02 | API Key 管理 | 输入框 + 显示/隐藏切换；建议支持加密存储 |
-| P-03 | 模型列表 | 每个 Provider 下 `models[]`，字段：`id` / `name` / `group` |
-| P-04 | 分组展示 | 模型按 `group` 分组（如 `gemini-2.5` 组含 gemini-2.5-pro / gemini-2.5-flash） |
-| P-05 | 启用/禁用 Provider | `enabled: boolean`，禁用后模型不在选择列表中显示 |
-| P-06 | 多场景模型绑定 | `defaultModel` / `topicNamingModel` / `translateModel` 独立绑定 |
-| P-07 | 快捷助手模型 | `quickAssistantModel` + `quickAssistantId`，一键唤起快捷问答 |
-| P-08 | 本地模型支持 | `llm.settings.ollama/lmstudio/gpustack` 配置保活时间 |
-| P-09 | Vertex AI | `llm.settings.vertexai` 配置 serviceAccount / projectId / location |
-
-### 3.5 优先级：P0
-
----
-
-## 4. 思考链（Thinking）
-
-### 4.1 功能概述
-展示 AI 模型的推理思考过程。`message_blocks` 中 `type="thinking"` 类型（91 条）专门存储思考内容，与正文（main_text）分离展示。
-
-### 4.2 数据依据
-
-| 存储 | 字段 | 说明 |
-|------|------|------|
-| `message_blocks[type="thinking"]` | `content` (91 条) | 思考过程文本 |
-| `settings.thoughtAutoCollapse` | `boolean` | 是否自动折叠思考块 |
-
-### 4.3 用户故事
-- 作为用户，我可以在 AI 回答中看到它的思考过程，点击折叠/展开
-
-### 4.4 功能规格
-
-| ID | 功能点 | 规格说明 |
-|----|--------|---------|
-| T-01 | 思考过程展示 | 消息中 `thinking` block 独立渲染，样式区别于 main_text |
-| T-02 | 折叠/展开 | 单击 toggle；`thoughtAutoCollapse=true` 时默认折叠 |
-| T-03 | 流式显示 | thinking 块在 `streaming` 状态下实时增量显示 |
-
-### 4.5 优先级：P1
-
----
-
-## 5. 引用来源（Citation）
-
-### 5.1 功能概述
-AI 回答中展示引用来源。`message_blocks` 中 `type="citation"`（8 条）存储引用信息，`citationReferences` 字段存储结构化来源数据。
-
-### 5.2 数据依据
-
-| 存储 | 字段 | 说明 |
-|------|------|------|
-| `message_blocks[type="citation"]` | `content` (8 条) | 引用文本 |
-| `message_blocks[].citationReferences` | `unknown[]` | 引用来源结构数组 |
-
-### 5.3 用户故事
-- 作为用户，当 AI 回答引用外部资料时，我可以看到来源链接并点击跳转
-
-### 5.4 功能规格
-
-| ID | 功能点 | 规格说明 |
-|----|--------|---------|
-| CI-01 | 引用展示 | citation block 以脚注或卡片形式展示来源 |
-| CI-02 | 来源跳转 | citationReferences 包含 URL，点击可跳转 |
-
-### 5.5 优先级：P1
-
----
-
-## 6. 工具调用
-
-### 6.1 功能概述
-展示模型工具调用（Function Calling）的执行过程和结果。`type="tool"`（6 条）在 message_blocks 中独立存储。
-
-### 6.2 数据依据
-
-| 存储 | 字段 | 说明 |
-|------|------|------|
-| `message_blocks[type="tool"]` | `content` (6 条) | 工具调用代码/结果 |
-| `Assistant.settings.toolUseMode` | `"prompt"` | 工具使用模式 |
-
-### 6.3 用户故事
-- 作为用户，当 AI 使用工具查询外部数据时，我可以看到调用了什么工具及其返回结果
-
-### 6.4 功能规格
-
-| ID | 功能点 | 规格说明 |
-|----|--------|---------|
-| TL-01 | 工具调用展示 | tool block 以可折叠卡片形式展示工具名、参数、返回结果 |
-| TL-02 | 状态指示 | tool 块包含 `status`：成功/失败/执行中 |
-
-### 6.5 优先级：P2
-
----
-
-## 7. 云同步 / 备份
-
-### 7.1 功能概述
-多后端数据备份与同步，支持 WebDAV / S3 / 坚果云，支持自动同步和备份版本管理。
-
-### 7.2 数据依据
-
-| 存储 | 字段 | 说明 |
-|------|------|------|
-| `backup` | — | 备份配置 |
-| `nutstore` | — | 坚果云同步配置 |
-| `settings.webdav*` | `host/user/pass/path/autoSync/interval/maxBackups` | WebDAV 7 项 |
-| `settings.s3` | `object` | S3 配置 |
-| `settings.skipBackupFile` | `boolean` | 备份时跳过文件 |
-| `settings.webdavSkipBackupFile` | `boolean` | WebDAV 跳过文件 |
-
-### 7.3 用户故事
-- 作为用户，我可以将数据和配置自动备份到 WebDAV/坚果云/S3，换设备后可恢复
-
-### 7.4 功能规格
-
-| ID | 功能点 | 规格说明 |
-|----|--------|---------|
-| SY-01 | WebDAV 同步 | 配置 host/user/pass/path，支持自动同步 |
-| SY-02 | 坚果云同步 | 坚果云 OAuth / 密码模式 |
-| SY-03 | S3 存储 | S3 兼容的对象存储备份 |
-| SY-04 | 自动同步 | `webdavAutoSync` + `webdavSyncInterval`（分钟） |
-| SY-05 | 备份版本 | `webdavMaxBackups` 控制最大备份数量 |
-| SY-06 | 导出/导入 | `exportMenuOptions` 自定义导出内容项 |
-| SY-07 | 备份过滤 | `skipBackupFile` 跳过文件类数据 |
-
-### 7.5 优先级：P1
-
----
-
-## 8. 全局设置
-
-### 8.1 功能概述
-119 项全局用户偏好设置，覆盖外观、交互、功能开关、隐私等。
-
-### 8.2 数据依据
-
-| 存储 | 字段 | 说明 |
-|------|------|------|
-| `settings` | 119 项配置 | 涵盖：外观/编辑器/同步/通知/快捷键/隐私 |
-
-### 8.3 设置项分类
-
-| 分类 | 字段示例 | 项数 |
-|------|---------|------|
-| **外观** | `theme`, `fontSize`, `windowStyle`, `messageStyle`, `messageFont`, `userTheme`, `narrowMode` | 18 |
-| **布局** | `showAssistants`, `showTopics`, `topicPosition`, `sidebarIcons`, `showMessageDivider` | 10 |
-| **对话交互** | `sendMessageShortcut`, `messageNavigation`, `foldDisplayMode`, `autoTranslateWithSpace` | 8 |
-| **通知** | `notification`, `launchOnBoot`, `tray`, `trayOnClose`, `autoCheckUpdate` | 6 |
-| **同步/备份** | `webdav*` (7), `s3`, `backup`, `skipBackupFile` | 10 |
-| **截图/OCR** | `ocr` 配置 | 3 |
-| **隐私** | `enableDataCollection`, `readClipboardAtStartup` | 4 |
-| **快捷键** | `sendMessageShortcut`, `shortcuts` | 8 |
-| **数学/公式** | `mathEngine`, `forceDollarMathInMarkdown` | 3 |
-| **其他** | `proxyMode`, `exportMenuOptions`, `spellCheckLanguages` | 34 |
-
-### 8.4 优先级
-
-| 分类 | 优先级 |
-|------|--------|
-| 外观 / 布局 / 对话交互 | P0 |
-| 同步 / 备份 | P1 |
-| 通知 / 数学 / 快捷键 | P1 |
-| 截图 / OCR / 隐私 | P2 |
-
----
-
-## 附录 A：完整功能优先级矩阵
-
-| # | 功能模块 | 优先级 | 核心存储 | 数据量 |
-|---|---------|--------|---------|--------|
-| 1 | 对话引擎 | P0 | `topics` + `message_blocks` | 43 话题 / 482 消息 / 657 blocks |
-| 2 | 多助手系统 | P0 | `assistants` | 3 助手 / 34 topic 引用 |
-| 3 | Provider / 模型管理 | P0 | `llm.providers` | 61 Provider（52 系统 + 9 用户） |
-| 4 | 思考链 (Thinking) | P1 | `message_blocks[thinking]` | 91 条 |
-| 5 | 引用来源 (Citation) | P1 | `message_blocks[citation]` | 8 条 |
-| 6 | 工具调用 | P2 | `message_blocks[tool]` | 6 条 |
-| 7 | 云同步 / 备份 | P1 | `backup` / `nutstore` / `webdav*` | — |
-| 8 | 全局设置 | P0 | `settings` (119 项) | — |
-
-## 附录 B：核心数据模型关系
-
-```
-Provider (61) ──1:N──> Model ──引用──> Assistant.model / Assistant.defaultModel
-                                              │
-Assistant (3) ──1:N──> TopicRef (34) ──ID引用──> Topic (43)
-                        │                            │
-                        ├─ name                      └──1:N──> Message (482)
-                        ├─ createdAt/updatedAt                     │
-                        └─ isNameManuallyEdited                    ├── blocks[] (block ID refs)
-                                                                   ├── usage (TokenUsage)
-                                                                   └── modelId (Provider ref)
-                                                                              │
-Message ──1:N──> MessageBlock (657, 通过 messageId 关联)
-                   ├── type: main_text | thinking | citation | error | tool | unknown
-                   ├── status: success | error | streaming | processing
-                   ├── content: string
-                   └── citationReferences: unknown[]
+AppData
+  -> 引用校验
+  -> Cherry-compatible export JSON
 ```
 
-> **文档版本**: v1.0 | **基于**: `data.json` v5, 3.0 MB | **配套**: `docs/data-json-schema.md` `docs/data-architecture.md`
+### 3.1 架构原则
+
+- `AppData` 是唯一持久化业务数据根。
+- `appStore` 是 Provider、Assistant、Topic 和 Settings 的唯一事实来源。
+- `chatStore` 只保存当前对话、草稿、附件、流式请求和其他短生命周期状态。
+- Message 的 `blocks[]` 是内容块唯一来源；不得再维护独立全局 block 镜像。
+- 所有业务关系使用 ID 引用，删除父实体时必须显式处理子实体。
+- 外部交换格式只存在于导入导出边界，页面和 Store 不依赖 Cherry 类型。
+
+## 4. 唯一数据契约
+
+### 4.1 AppData
+
+```ts
+interface AppData {
+  version: number
+  providers: Provider[]
+  assistants: Assistant[]
+  topics: Topic[]
+  settings: Settings
+}
+```
+
+`AppData` 不包含 `cherryData`、`compatZone`、全局 `messageBlocks` 或任何外部应用的原始持久化对象。
+
+### 4.2 Provider 和模型
+
+```ts
+interface Provider {
+  id: string
+  name: string
+  apiHost: string
+  apiKey?: string
+  models: ModelInfo[]
+  enabled: boolean
+}
+
+interface ModelInfo {
+  id: string
+  name: string
+  group?: string
+  supportedTextDelta?: boolean
+  description?: string
+  maxTokens?: number
+  contextLength?: number
+  enabled: boolean
+}
+```
+
+约束：
+
+- `Provider.id` 全局唯一。
+- 同一个 Provider 内 `ModelInfo.id` 唯一。
+- 禁用 Provider 或模型不会出现在模型选择器中。
+- 删除 Provider 前必须检查是否有 Assistant 使用其模型；有引用时要求先迁移模型或明确删除引用。
+- API Key 可以保存在浏览器 IndexedDB，但默认导出时必须剔除。
+
+### 4.3 Assistant
+
+```ts
+interface Assistant {
+  id: string
+  name: string
+  prompt: string
+  enabled: boolean
+  isDefault: boolean
+  emoji?: string
+  description?: string
+  model?: string
+  temperature?: number
+  topP?: number
+  maxTokens?: number
+  enableWebSearch?: boolean
+  createdAt: string
+  updatedAt: string
+}
+```
+
+约束：
+
+- `Assistant.id` 全局唯一。
+- 必须且只能有一个 `isDefault=true` 的 Assistant。
+- `prompt` 允许为空字符串。
+- `model` 是模型 ID；未设置时使用当前选择模型。
+- 删除 Assistant 前必须处理其 Topic：迁移到另一个 Assistant 或同时删除。
+
+### 4.4 Topic
+
+```ts
+interface Topic {
+  id: string
+  assistantId: string
+  name: string
+  messages: ChatMessage[]
+  isNameManuallyEdited: boolean
+  pinned: boolean
+  createdAt: string
+  updatedAt: string
+}
+```
+
+约束：
+
+- `Topic.id` 全局唯一。
+- `assistantId` 必须引用存在的 Assistant。
+- Topic 和消息均使用 ISO 8601 UTC 时间。
+- 自动命名只能覆盖 `isNameManuallyEdited=false` 的 Topic。
+- `pinned=true` 的 Topic 在侧边栏优先展示，其余按 `updatedAt` 倒序。
+
+### 4.5 Message 和内容块
+
+```ts
+type MessageRole = 'user' | 'assistant' | 'system'
+type MessageStatus = 'sending' | 'streaming' | 'complete' | 'error' | 'stopped'
+type MessageBlockType = 'main_text' | 'thinking' | 'error' | 'citation' | 'tool' | 'unknown'
+type MessageBlockStatus = 'streaming' | 'success' | 'error'
+
+interface MessageBlock {
+  id: string
+  type: MessageBlockType
+  content: string
+  status: MessageBlockStatus
+  createdAt: string
+  citationReferences?: unknown[]
+}
+
+interface ChatMessage {
+  id: string
+  topicId: string
+  role: MessageRole
+  content: string
+  createdAt: string
+  status: MessageStatus
+  model?: string
+  rating?: '' | 'up' | 'down'
+  error?: string
+  reasoningContent?: string
+  blocks: MessageBlock[]
+  usage?: {
+    prompt_tokens?: number
+    completion_tokens?: number
+    total_tokens?: number
+  }
+}
+```
+
+约束：
+
+- `ChatMessage.id` 全局唯一，`topicId` 必须等于所在 Topic 的 `id`。
+- 用户消息至少有一个 `main_text` block。
+- Assistant 消息的正文写入 `main_text` block；推理内容写入 `thinking` block；失败写入 `error` block。
+- `content` 是正文的渲染缓存，与所有 `main_text` block 拼接结果一致。
+- `reasoningContent` 是思考内容的渲染缓存，与所有 `thinking` block 拼接结果一致。
+- Message 状态机：`sending -> streaming -> complete`，异常转为 `error`，用户取消转为 `stopped`。
+- 任何 block 的顺序必须遵循 `ChatMessage.blocks[]`，不得依赖外部扁平数组的排列。
+
+### 4.6 Settings
+
+```ts
+interface Settings {
+  language: 'zh-CN' | 'en-US'
+  theme: 'light' | 'dark' | 'auto'
+  fontSize: number
+  sendShortcut: 'Enter' | 'Ctrl+Enter' | 'Shift+Enter'
+  autoScroll: boolean
+  autoCheckUpdate: boolean
+  messageStyle: 'plain' | 'bubble'
+  messageFont: 'system' | 'serif' | 'mono'
+  codeShowLineNumbers: boolean
+  codeWrappable: boolean
+  codeCollapsible: boolean
+  foldDisplayMode: 'full' | 'compact'
+  confirmDeleteMessage: boolean
+  confirmRegenerateMessage: boolean
+  showTokens: boolean
+  showMessageDivider: boolean
+  showMessageOutline: boolean
+  messageNavigation: boolean
+  enableTopicNaming: boolean
+  pinTopicsToTop: boolean
+  showTopics: boolean
+  showTopicTime: boolean
+  showInputEstimatedTokens: boolean
+  pasteLongTextAsFile: boolean
+  pasteLongTextThreshold: number
+  renderInputMessageAsMarkdown: boolean
+  mathEngine: 'katex' | 'mathjax'
+  targetLanguage: string
+}
+```
+
+未声明的设置不进入运行时或持久化结构。导入时只转换此列表中的字段，其余外部设置直接丢弃。
+
+## 5. 功能需求
+
+### F-01 Provider 管理
+
+- 支持创建、编辑、启用、禁用和删除 Provider。
+- Provider 编辑页支持维护 API Host、API Key 和模型列表。
+- 模型支持创建、重命名、启用、禁用和删除。
+- 删除存在 Assistant 模型引用的 Provider 或模型时，界面必须阻止并说明引用位置。
+- 模型选择器按启用状态展示 Provider 与模型。
+
+优先级：P0。
+
+### F-02 Assistant 管理
+
+- 支持创建、编辑、设为默认、启用、禁用和删除 Assistant。
+- 编辑项包括名称、图标、系统提示词、模型、temperature、topP、最大输出 Token 和联网搜索开关。
+- 设置默认 Assistant 时必须清除其他 Assistant 的默认标记。
+- 删除有 Topic 的 Assistant 时必须让用户选择迁移目标或确认级联删除。
+
+优先级：P0。
+
+### F-03 Topic 管理
+
+- 支持在默认或当前 Assistant 下新建 Topic。
+- 支持切换、搜索、重命名、置顶、清空消息和删除 Topic。
+- 自动命名从首条用户消息生成，最大 30 个字符；手动重命名后不再自动覆盖。
+- 按置顶和最近更新时间排序。
+
+优先级：P0。
+
+### F-04 对话和流式生成
+
+- 用户发送文本或附件描述后立即创建用户消息。
+- 系统创建 Assistant 占位消息，并处理 SSE `content`、`reasoning_content`、`usage` 增量。
+- 思考与正文分块渲染；停止生成后保留已收到内容。
+- 网络、认证或服务端错误必须显示错误块，并允许重新生成。
+- 模型请求使用当前选中模型；未显式选择时使用默认 Assistant 的模型或第一个可用模型。
+
+优先级：P0。
+
+### F-05 本地持久化
+
+- 所有 `AppData` 保存在 IndexedDB 中。
+- 应用启动时恢复全部业务数据。
+- 多个连续变更采用串行、防抖保存，避免流式过程中频繁全量写入和旧快照覆盖。
+- 保存中、保存失败和保存完成状态应在顶栏可见。
+- IndexedDB schema 或 `AppData.version` 变更必须提供逐版本迁移。
+
+优先级：P0。
+
+### F-06 导入
+
+- 支持选择 Cherry Studio v5 JSON 文件。
+- 解析后显示 Provider、Assistant、Topic、Message、Block 数量和 warning 数量。
+- 必须从 Assistant 的 Topic 引用恢复 Topic 的归属、标题、创建时间、更新时间和手动命名状态。
+- Block 必须按 `Message.blocks[]` ID 顺序恢复。
+- 无法关联的 Topic 回退到默认 Assistant，并列入 warning。
+- 无法关联的 block 不进入目标数据。
+- 只导入第 4 节声明的字段，外部冗余字段丢弃。
+
+优先级：P0。
+
+### F-07 导出
+
+- 导出文件使用 Cherry v5 可读取的 JSON 外壳。
+- 默认不包含 API Key；用户需要显式勾选才允许导出密钥。
+- 导出必须写入 Assistant Topic 引用、Topic 元数据、消息与 block 关联。
+- 默认 Assistant 由 `isDefault=true` 决定，不能依赖数组顺序。
+- 导出前进行引用校验；存在错误时阻止下载并显示错误列表。
+
+优先级：P1。
+
+### F-08 设置与界面
+
+- 设置面板只展示第 4.6 节的设置项。
+- 主题、字号、消息样式、代码显示、发送快捷键和 Token 显示立即生效。
+- 桌面端使用侧边栏、消息区、会话检查器三栏布局。
+- 平板端隐藏固定检查器并提供抽屉入口。
+- 移动端使用底部导航与侧栏抽屉，所有文字和控件在窄屏可用。
+
+优先级：P1。
+
+## 6. 导入映射规则
+
+| Cherry v5 源 | Orbit 目标 | 规则 |
+|---|---|---|
+| `llm.providers[]` | `providers[]` | 仅导入 Provider 和 Model 声明字段 |
+| `assistants.defaultAssistant` | `Assistant.isDefault` | 以 ID 标记默认 Assistant |
+| `assistants.assistants[]` | `assistants[]` | 按 ID 去重后导入 |
+| `assistant.topics[]` | Topic 元数据索引 | 以 Topic ID 关联归属和元数据 |
+| `indexedDB.topics[]` | `topics[]` | 导入消息并与 Topic 元数据合并 |
+| `message_blocks[]` | `ChatMessage.blocks[]` | 按 Message 的 block ID 顺序映射 |
+| `persist.settings` | `settings` | 仅白名单字段转换 |
+
+导入后必须执行：ID 唯一性检查、Topic -> Assistant 检查、Message -> Topic 检查、block 引用检查和默认 Assistant 唯一性检查。
+
+## 7. 持久化和版本迁移
+
+### 7.1 IndexedDB
+
+```text
+Database: orbit-chat
+ObjectStore: appData
+Record key: main
+Record: { key: 'main', data: AppData }
+```
+
+业务数据采用单记录以保持初期实现简单。保存操作必须串行化，并以 200ms 防抖合并连续更新。流式消息仅在开始、每个批次和结束时持久化，不能每个 SSE 字符都写数据库。
+
+### 7.2 迁移
+
+- `AppData.version` 是数据结构版本，不等同于导入文件版本。
+- 启动时按版本顺序执行迁移，直到当前版本。
+- 迁移前保留原记录；迁移失败时不覆盖旧记录。
+- 旧数据含有 `cherryData`、`compatZone`、`messageBlocks` 时，迁移必须删除这些字段，并保留每条 Message 的内嵌 `blocks[]`。
+
+## 8. 非功能需求
+
+| 维度 | 要求 |
+|---|---|
+| 数据完整性 | 不能生成孤立 Topic、Message 或 block 引用 |
+| 性能 | 100 个 Topic、5,000 条 Message 下打开会话不阻塞主线程 |
+| 可恢复性 | 刷新后恢复最后保存状态；中断生成保留已接收内容 |
+| 安全 | 默认导出不包含 API Key；前端明确提示本地密钥存储风险 |
+| 可维护性 | 业务代码只依赖 Orbit 类型，Cherry 类型仅位于导入导出工具 |
+| 可访问性 | 所有图标按钮具有 tooltip 或可访问名称；键盘可触发主要操作 |
+
+## 9. 验收标准
+
+1. 创建 Provider、模型、Assistant 和 Topic 后刷新页面，数据保持不变。
+2. 同一时刻只能有一个默认 Assistant。
+3. 删除被 Topic 使用的 Assistant 或模型时，页面不会静默留下失效引用。
+4. 用户消息、Assistant 正文、思考内容、错误和 Token 用量可在流式过程中正确显示。
+5. 停止生成后，已收到的正文和 thinking 内容仍保留。
+6. 导入多 Assistant Cherry v5 文件后，Topic 的归属、标题和时间与源数据一致。
+7. 导出后的 JSON 不含 API Key，且再次导入后 Provider、Assistant、Topic、Message 和 block 数量闭环。
+8. 导出前发现无效引用时，下载被阻止并显示具体问题。
+9. 桌面、平板、移动端可完成新建对话、发送消息、切换模型、打开设置和管理 Topic。
+
+## 10. 实施顺序
+
+1. 收紧类型、清理旧字段、加入默认值和版本迁移。
+2. 重写导入导出映射及引用校验。
+3. 将 appStore 保存改为串行防抖，并补充删除引用保护。
+4. 对齐 chatStore 的消息状态与 block 写入。
+5. 完善 Provider、Assistant、Topic 管理界面和导入报告。
+6. 增加数据层单元测试、导入导出闭环测试和响应式界面回归测试。

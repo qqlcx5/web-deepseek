@@ -2,10 +2,12 @@
 import { ref, nextTick } from 'vue'
 import { useChatStore } from '@/stores/chat'
 import { useTheme } from '@/composables/useTheme'
+import { useAppStore } from '@/stores/app'
 import { Icon } from '@iconify/vue'
 
 const store = useChatStore()
-const { isDark, toggleTheme } = useTheme()
+const appStore = useAppStore()
+const { isDark, setTheme } = useTheme()
 
 const renaming = ref(false)
 const renameInput = ref<HTMLInputElement | null>(null)
@@ -24,6 +26,12 @@ function confirmRename() {
     store.showToast('对话已重命名')
   }
   renaming.value = false
+}
+
+function toggleAppTheme() {
+  const theme = isDark.value ? 'light' : 'dark'
+  appStore.updateSettings({ theme })
+  setTheme(theme)
 }
 </script>
 
@@ -63,9 +71,9 @@ function confirmRename() {
           <Icon icon="tabler:pencil" width="13" />
         </button>
       </div>
-      <div class="save-state">
-        <Icon icon="tabler:cloud-check" />
-        {{ store.saving ? '正在保存...' : (store.currentChat ? '刚刚保存' : '就绪') }}
+      <div class="save-state" :class="{ 'save-error': store.saveError }">
+        <Icon :icon="store.saveError ? 'tabler:cloud-x' : 'tabler:cloud-check'" />
+        {{ store.saveError ? '保存失败' : (store.saving ? '正在保存...' : (store.currentChat ? '刚刚保存' : '就绪')) }}
         <template v-if="store.currentChat">· {{ store.messages.length }} 条消息</template>
       </div>
     </div>
@@ -79,7 +87,7 @@ function confirmRename() {
     <button
       class="icon-btn tooltip"
       data-tip="切换主题"
-      @click="toggleTheme"
+      @click="toggleAppTheme"
     >
       <Icon :icon="isDark ? 'tabler:sun' : 'tabler:moon'" />
     </button>
@@ -135,6 +143,8 @@ function confirmRename() {
 .chat-heading { overflow: hidden; margin: 0; font-size: 14px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
 .save-state { display: flex; align-items: center; gap: 4px; margin-top: 3px; color: var(--faint); font-size: 10px; }
 .save-state :deep(svg) { width: 12px; height: 12px; color: var(--success); }
+.save-state.save-error :deep(svg) { color: var(--danger); }
+.save-state.save-error { color: var(--danger); }
 .rename-input { height: 28px; padding: 0 6px; color: var(--text); background: var(--surface); border: 1px solid var(--brand); border-radius: 4px; font-size: 14px; font-weight: 700; outline: 0; max-width: 300px; }
 .model-button {
   display: flex; height: 34px; max-width: 180px; align-items: center; gap: 7px;
