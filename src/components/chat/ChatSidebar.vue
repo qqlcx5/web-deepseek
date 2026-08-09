@@ -149,7 +149,7 @@ if (typeof document !== 'undefined') {
           <span v-else class="chat-title">{{ chat.title }}</span>
           <span class="chat-preview">{{ chat.preview }}</span>
         </span>
-        <button
+        <div
           v-if="menuOpenId === chat.id"
           class="chat-menu"
           @click.stop
@@ -166,7 +166,7 @@ if (typeof document !== 'undefined') {
             <Icon icon="tabler:trash" width="13" />
             删除
           </button>
-        </button>
+        </div>
         <button
           v-else
           class="chat-more"
