@@ -5,7 +5,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { useTheme } from '@/composables/useTheme'
 import { useAppStore } from './app'
-import type { Model, Workspace, Command, PromptPreset, ModalType } from '@/types'
+import type { Model, Command, PromptPreset, ModalType } from '@/types'
 
 const TABLET_BP = 1180
 const MOBILE_BP = 760
@@ -18,12 +18,6 @@ export const useUiStore = defineStore('ui', () => {
   const mobileBreakpoint = MOBILE_BP
 
   // ─── Static Data ───
-  const workspaces: Workspace[] = [
-    { id: 'personal', name: '个人空间', color: '#5b56d6', count: 0 },
-    { id: 'product', name: '产品研发', color: '#16875d', count: 0 },
-    { id: 'content', name: '内容创作', color: '#d97706', count: 0 },
-  ]
-
   const promptPresets: PromptPreset[] = [
     {
       name: '技术评审',
@@ -125,9 +119,6 @@ export const useUiStore = defineStore('ui', () => {
       }
     }
   }
-
-  // ─── Workspace ───
-  const activeWorkspaceId = ref<string | null>('personal')
 
   // ─── Getters ───
   const filteredCommands = computed(() => {
@@ -265,13 +256,13 @@ export const useUiStore = defineStore('ui', () => {
     // Constants
     tabletBreakpoint, mobileBreakpoint,
     // Static Data
-    workspaces, models, promptPresets, commands,
+    models, promptPresets, commands,
     // Layout State
     sidebarOpen, inspectorOpen, inspectorVisible, focusMode,
     online, saving, modal, toast, undoAction,
     // Input State
     commandQuery, nearBottom, promptDraft,
-    selectedModel, activeWorkspaceId,
+    selectedModel,
     // Getters
     filteredCommands, filteredCommandChats,
     // Actions

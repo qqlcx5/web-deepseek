@@ -10,6 +10,12 @@ const uiStore = useUiStore()
 
 const settings = computed(() => appStore.settings)
 
+const managementActions = [
+  { label: 'Provider 与模型', description: 'API 服务商、密钥和模型列表', icon: 'server', modal: 'provider' as const },
+  { label: 'Assistant', description: '提示词、默认助手和话题归属', icon: 'robot', modal: 'assistant' as const },
+  { label: '系统提示词', description: '编辑当前会话的回答规则', icon: 'message-cog', modal: 'prompt' as const },
+]
+
 interface SettingItem {
   key: keyof Settings
   label: string
@@ -129,6 +135,28 @@ function close() {
     </header>
 
     <div class="dialog-body scroll">
+      <section class="panel-section management-section">
+        <div class="panel-heading">
+          <Icon icon="tabler:tool" width="14" />
+          模型与助手
+        </div>
+        <div class="management-grid">
+          <button
+            v-for="action in managementActions"
+            :key="action.modal"
+            class="management-action"
+            @click="uiStore.modal = action.modal"
+          >
+            <Icon :icon="`tabler:${action.icon}`" width="16" />
+            <span class="management-copy">
+              <span>{{ action.label }}</span>
+              <small>{{ action.description }}</small>
+            </span>
+            <Icon icon="tabler:chevron-right" width="14" />
+          </button>
+        </div>
+      </section>
+
       <section
         v-for="group in groups"
         :key="group.title"
@@ -210,6 +238,13 @@ function close() {
 .panel-section + .panel-section { padding-top: 15px; }
 .panel-section:last-child { border-bottom: 0; }
 .panel-heading { display: flex; align-items: center; gap: 6px; margin-bottom: 9px; color: var(--text-secondary); font-size: 11px; font-weight: 700; }
+.management-grid { display: grid; gap: 6px; }
+.management-action { display: flex; width: 100%; min-width: 0; align-items: center; gap: 9px; padding: 8px; color: var(--text-secondary); background: var(--surface-2); border: 1px solid var(--line); border-radius: 6px; text-align: left; cursor: pointer; }
+.management-action:hover { color: var(--text); border-color: var(--brand); }
+.management-action > :first-child { color: var(--brand); flex: 0 0 auto; }
+.management-action > :last-child { color: var(--faint); flex: 0 0 auto; }
+.management-copy { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 2px; font-size: 11px; font-weight: 650; }
+.management-copy small { overflow: hidden; color: var(--faint); font-size: 9px; font-weight: 400; text-overflow: ellipsis; white-space: nowrap; }
 
 .setting-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 0; }
 .setting-label { font-size: 11px; color: var(--text-secondary); }

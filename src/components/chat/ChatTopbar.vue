@@ -85,6 +85,22 @@ function toggleAppTheme() {
     </button>
 
     <button
+      class="icon-btn tooltip desktop-only"
+      data-tip="Provider 和模型配置"
+      @click="store.modal = 'provider'"
+    >
+      <Icon icon="tabler:server" />
+    </button>
+
+    <button
+      class="icon-btn tooltip desktop-only"
+      data-tip="Assistant 管理"
+      @click="store.modal = 'assistant'"
+    >
+      <Icon icon="tabler:robot" />
+    </button>
+
+    <button
       class="icon-btn tooltip"
       data-tip="切换主题"
       @click="toggleAppTheme"

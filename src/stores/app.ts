@@ -213,7 +213,7 @@ export const useAppStore = defineStore('app', () => {
     return assistants.value.find(assistant => assistant.model === modelId)
   }
 
-  function validateProvider(provider: Provider, exceptId?: string): MutationResult {
+  function validateProvider(provider: Provider): MutationResult {
     if (!provider.id.trim()) return { ok: false, error: 'Provider ID 不能为空。' }
     if (!provider.name.trim()) return { ok: false, error: 'Provider 名称不能为空。' }
     if (!provider.apiHost.trim()) return { ok: false, error: 'API Host 不能为空。' }
@@ -223,10 +223,6 @@ export const useAppStore = defineStore('app', () => {
       if (!model.id.trim()) return { ok: false, error: '模型 ID 不能为空。' }
       if (seenModelIds.has(model.id)) return { ok: false, error: `模型 ID 重复：${model.id}` }
       seenModelIds.add(model.id)
-      const conflict = providers.value.find(candidate =>
-        candidate.id !== exceptId && candidate.models.some(other => other.id === model.id),
-      )
-      if (conflict) return { ok: false, error: `模型 ID “${model.id}”已被 ${conflict.name} 使用。` }
     }
     return { ok: true }
   }
@@ -246,7 +242,7 @@ export const useAppStore = defineStore('app', () => {
     const provider = providers.value.find(candidate => candidate.id === id)
     if (!provider) return { ok: false, error: 'Provider 不存在。' }
     const next = { ...provider, ...patch }
-    const validation = validateProvider(next, id)
+    const validation = validateProvider(next)
     if (!validation.ok) return validation
 
     const nextModelIds = new Set(next.models.map(model => model.id))

@@ -10,7 +10,6 @@ export type {
   Chat,
   Model,
   ModelListResponse,
-  Workspace,
   ChatCompletionMessage,
   ChatCompletionRequest,
   ChatCompletionChunk,

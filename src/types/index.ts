@@ -184,13 +184,6 @@ export interface ModelListResponse {
   }>
 }
 
-export interface Workspace {
-  id: string
-  name: string
-  color: string
-  count: number
-}
-
 export type ModalType = '' | 'command' | 'model' | 'prompt' | 'settings' | 'provider' | 'assistant'
 
 export interface Command {

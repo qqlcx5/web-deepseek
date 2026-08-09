@@ -1,5 +1,6 @@
 import 'fake-indexeddb/auto'
 import { beforeEach, describe, expect, it } from 'vitest'
+import { reactive } from 'vue'
 import type { AppData } from '@/types'
 import { clearAppData, loadAppData, saveAppData } from '@/utils/db'
 import { DEFAULT_SETTINGS } from '@/utils/data-import'
@@ -39,6 +40,13 @@ describe('IndexedDB app data persistence', () => {
     await saveAppData(data)
 
     await expect(loadAppData()).resolves.toEqual(data)
+  })
+
+  it('accepts reactive Pinia-shaped data without a DataCloneError', async () => {
+    const data = reactive(createData()) as AppData
+
+    await expect(saveAppData(data)).resolves.toBeUndefined()
+    await expect(loadAppData()).resolves.toEqual(createData())
   })
 
   it('clears the persisted record', async () => {

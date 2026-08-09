@@ -40,11 +40,18 @@ export function openDB(): Promise<IDBDatabase> {
   return dbOpenPromise
 }
 
+function toStoredData(data: AppData): AppData {
+  // Pinia state is reactive Proxy data, which IndexedDB structured-clone rejects.
+  // AppData is JSON-only by contract, so serialization also removes Vue reactivity.
+  return JSON.parse(JSON.stringify(data)) as AppData
+}
+
 export async function saveAppData(data: AppData): Promise<void> {
   const db = await openDB()
+  const storedData = toStoredData(data)
   return new Promise<void>((resolve, reject) => {
     const tx = db.transaction(STORE_NAME, 'readwrite')
-    tx.objectStore(STORE_NAME).put({ key: RECORD_KEY, data })
+    tx.objectStore(STORE_NAME).put({ key: RECORD_KEY, data: storedData })
     tx.oncomplete = () => resolve()
     tx.onerror = () => reject(tx.error ?? new Error('本地数据保存失败'))
     tx.onabort = () => reject(tx.error ?? new Error('本地数据保存被取消'))

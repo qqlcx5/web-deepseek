@@ -111,18 +111,29 @@ if (typeof document !== 'undefined') {
     </div>
 
     <div class="sidebar-scroll scroll">
-      <div class="section-label">工作区</div>
-      <button
-        v-for="ws in store.workspaces"
-        :key="ws.id"
-        class="workspace-row"
-      >
-        <span class="workspace-dot" :style="{ backgroundColor: ws.color }" />
-        <span>{{ ws.name }}</span>
-        <span class="workspace-count">{{ ws.count }}</span>
-      </button>
+      <div class="section-label assistant-section-label">
+        <span>助手</span>
+        <button class="assistant-add tooltip" data-tip="管理 Assistant" @click="store.modal = 'assistant'">
+          <Icon icon="tabler:plus" width="14" />
+        </button>
+      </div>
+      <div class="assistant-tabs" role="tablist" aria-label="Assistant 会话筛选">
+        <button
+          v-for="assistant in store.assistantTabs"
+          :key="assistant.id"
+          class="assistant-tab"
+          :class="{ active: store.activeAssistantId === assistant.id }"
+          role="tab"
+          :aria-selected="store.activeAssistantId === assistant.id"
+          @click="store.selectAssistant(assistant.id)"
+        >
+          <span class="assistant-tab-emoji">{{ assistant.emoji || assistant.name.slice(0, 1) }}</span>
+          <span class="assistant-tab-name">{{ assistant.name }}</span>
+          <span class="assistant-tab-count">{{ store.assistantTopicCount(assistant.id) }}</span>
+        </button>
+      </div>
 
-      <div class="section-label" style="margin-top:10px">最近对话</div>
+      <div class="section-label" style="margin-top:10px">会话</div>
       <button
         v-for="chat in store.chats"
         :key="chat.id"
@@ -245,14 +256,21 @@ if (typeof document !== 'undefined') {
   display: flex; height: 28px; align-items: center; padding: 0 7px;
   color: var(--faint); font-size: 10px; font-weight: 700; text-transform: uppercase;
 }
-.workspace-row, .chat-row {
+.assistant-section-label { justify-content: space-between; }
+.assistant-add { display: inline-flex; width: 24px; height: 24px; align-items: center; justify-content: center; color: var(--muted); background: transparent; border: 0; border-radius: 4px; cursor: pointer; }
+.assistant-add:hover { color: var(--brand); background: var(--brand-soft); }
+.assistant-tabs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px; padding: 0 3px; }
+.assistant-tab { display: flex; min-width: 0; height: 34px; align-items: center; gap: 5px; padding: 0 6px; color: var(--text-secondary); background: var(--surface); border: 1px solid var(--line); border-radius: 5px; font-size: 10px; text-align: left; cursor: pointer; }
+.assistant-tab:hover { color: var(--text); border-color: var(--brand); }
+.assistant-tab.active { color: var(--brand); background: var(--brand-soft); border-color: var(--brand); }
+.assistant-tab-emoji { width: 16px; flex: 0 0 16px; overflow: hidden; text-align: center; font-size: 12px; }
+.assistant-tab-name { min-width: 0; flex: 1; overflow: hidden; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+.assistant-tab-count { color: var(--faint); font-size: 9px; font-variant-numeric: tabular-nums; }
+.chat-row {
   display: flex; width: 100%; min-width: 0; align-items: center; gap: 8px;
   color: var(--text-secondary); background: transparent; border-radius: 6px; text-align: left;
 }
-.workspace-row { height: 34px; padding: 0 8px; font-size: 12px; }
-.workspace-row:hover, .chat-row:hover { background: var(--surface-3); }
-.workspace-dot { width: 8px; height: 8px; border-radius: 2px; }
-.workspace-count { margin-left: auto; color: var(--faint); font-size: 10px; }
+.chat-row:hover { background: var(--surface-3); }
 .chat-row { position: relative; min-height: 48px; padding: 7px 8px; }
 .chat-row.active { color: var(--brand); background: var(--brand-soft); }
 .chat-icon { width: 16px; flex: 0 0 16px; color: var(--faint); }

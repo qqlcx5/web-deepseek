@@ -67,7 +67,6 @@ export function validateReferences(data: AppData): ValidationResult {
   const errors: string[] = []
   const warnings: string[] = []
   const providerIds = new Set<string>()
-  const modelIds = new Set<string>()
   const assistantIds = new Set<string>()
   const topicIds = new Set<string>()
   const messageIds = new Set<string>()
@@ -76,9 +75,12 @@ export function validateReferences(data: AppData): ValidationResult {
   for (const provider of data.providers) {
     if (providerIds.has(provider.id)) errors.push(`Provider ID 重复：${provider.id}`)
     providerIds.add(provider.id)
+    const providerModelIds = new Set<string>()
     for (const model of provider.models) {
-      if (modelIds.has(model.id)) errors.push(`模型 ID 重复：${model.id}`)
-      modelIds.add(model.id)
+      if (providerModelIds.has(model.id)) {
+        errors.push(`Provider “${provider.name}”内模型 ID 重复：${model.id}`)
+      }
+      providerModelIds.add(model.id)
     }
   }
 
@@ -90,7 +92,10 @@ export function validateReferences(data: AppData): ValidationResult {
   for (const assistant of data.assistants) {
     if (assistantIds.has(assistant.id)) errors.push(`Assistant ID 重复：${assistant.id}`)
     assistantIds.add(assistant.id)
-    if (assistant.model && !modelIds.has(assistant.model)) {
+    const modelExists = assistant.model
+      ? data.providers.some(provider => provider.models.some(model => model.id === assistant.model))
+      : true
+    if (!modelExists) {
       errors.push(`Assistant “${assistant.name}”引用了不存在的模型：${assistant.model}`)
     }
   }

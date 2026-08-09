@@ -294,15 +294,22 @@ function mapSettings(source: Record<string, unknown> | undefined): Settings {
 }
 
 export function buildAppData(cherry: CherryData): AppData {
-  const persist = cherry.localStorage['persist:cherry-studio']
+  const persist = cherry?.localStorage?.['persist:cherry-studio']
+  if (!persist?.llm || !Array.isArray(persist.llm.providers)) {
+    throw new Error('导入文件缺少有效的 persist:cherry-studio.llm.providers 数组。')
+  }
+  if (!persist.assistants || !Array.isArray(persist.assistants.assistants) || !persist.assistants.defaultAssistant) {
+    throw new Error('导入文件缺少有效的 persist:cherry-studio.assistants 配置。')
+  }
+  const indexedDB = cherry.indexedDB ?? { topics: [], message_blocks: [] }
   const now = new Date().toISOString()
   const providers = mapProviders(persist.llm.providers)
   const assistants = mapAssistants(persist.assistants.assistants, persist.assistants.defaultAssistant)
   const defaultAssistantId = assistants.find(assistant => assistant.isDefault)?.id ?? assistants[0]?.id
   const topicRefs = buildTopicRefIndex(persist.assistants.assistants, persist.assistants.defaultAssistant)
-  const blockById = new Map((cherry.indexedDB.message_blocks ?? []).map(block => [block.id, block]))
+  const blockById = new Map((indexedDB.message_blocks ?? []).map(block => [block.id, block]))
 
-  const topics: Topic[] = (cherry.indexedDB.topics ?? []).map(source => {
+  const topics: Topic[] = (indexedDB.topics ?? []).map(source => {
     const ref = topicRefs.get(source.id)
     return {
       id: source.id,

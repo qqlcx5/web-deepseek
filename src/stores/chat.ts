@@ -29,6 +29,7 @@ export const useChatStore = defineStore('chat', () => {
   const uiStore = useUiStore()
 
   const activeChatId = ref<string | null>(null)
+  const activeAssistantId = ref<string | null>(null)
   const messages = ref<ChatMessage[]>([])
   const draft = ref(localStorage.getItem('orbit-draft') ?? '')
   const replyingTo = ref('')
@@ -38,15 +39,18 @@ export const useChatStore = defineStore('chat', () => {
   const attachments = ref<Attachment[]>([])
 
   const currentChat = computed(() => activeChatId.value ? appStore.topicById(activeChatId.value) : undefined)
-  const chats = computed(() => appStore.sortedTopics.map(topic => ({
-    id: topic.id,
-    title: topic.name,
-    preview: topic.messages.at(-1)?.content.slice(0, 50) || '暂无消息',
-    pinned: topic.pinned,
-    createdAt: topic.createdAt,
-    updatedAt: topic.updatedAt,
-    messageCount: topic.messages.length,
-  })))
+  const assistantTabs = computed(() => appStore.assistants.filter(assistant => assistant.enabled))
+  const chats = computed(() => appStore.sortedTopics
+    .filter(topic => !activeAssistantId.value || topic.assistantId === activeAssistantId.value)
+    .map(topic => ({
+      id: topic.id,
+      title: topic.name,
+      preview: topic.messages.at(-1)?.content.slice(0, 50) || '暂无消息',
+      pinned: topic.pinned,
+      createdAt: topic.createdAt,
+      updatedAt: topic.updatedAt,
+      messageCount: topic.messages.length,
+    })))
   const canSend = computed(() => Boolean(draft.value.trim() || attachments.value.length) && !generating.value)
 
   const sidebarOpen = computed({ get: () => uiStore.sidebarOpen, set: value => { uiStore.sidebarOpen = value } })
@@ -72,16 +76,36 @@ export const useChatStore = defineStore('chat', () => {
 
   const searchResults = computed<SearchResult[]>(() => searchMessages(commandQuery.value).slice(0, 20))
 
+  function assistantTopicCount(assistantId: string): number {
+    return appStore.topics.filter(topic => topic.assistantId === assistantId).length
+  }
+
   function openConversation(id: string) {
     if (generating.value) stopGeneration()
+    const topic = appStore.topicById(id)
+    if (!topic) return
+    activeAssistantId.value = topic.assistantId
     activeChatId.value = id
-    messages.value = [...(appStore.topicById(id)?.messages ?? [])]
+    messages.value = [...topic.messages]
     uiStore.closeDrawers()
+  }
+
+  function selectAssistant(id: string) {
+    if (!assistantTabs.value.some(assistant => assistant.id === id)) return
+    activeAssistantId.value = id
+    const firstTopic = appStore.sortedTopics.find(topic => topic.assistantId === id)
+    if (firstTopic) {
+      openConversation(firstTopic.id)
+    } else {
+      activeChatId.value = null
+      messages.value = []
+      uiStore.closeDrawers()
+    }
   }
 
   function newConversation() {
     if (generating.value) stopGeneration()
-    const topic = appStore.addTopic(appStore.defaultAssistant?.id)
+    const topic = appStore.addTopic(activeAssistantId.value ?? appStore.defaultAssistant?.id)
     activeChatId.value = topic.id
     messages.value = []
     uiStore.closeDrawers()
@@ -114,15 +138,14 @@ export const useChatStore = defineStore('chat', () => {
   async function initApp() {
     await appStore.init()
     uiStore.initSelectedModel()
-    if (!activeChatId.value && appStore.sortedTopics.length > 0) {
-      openConversation(appStore.sortedTopics[0]!.id)
-    }
+    const initialAssistantId = appStore.defaultAssistant?.id ?? assistantTabs.value[0]?.id ?? null
+    if (!activeAssistantId.value) activeAssistantId.value = initialAssistantId
+    if (!activeChatId.value && activeAssistantId.value) selectAssistant(activeAssistantId.value)
   }
 
   function getActiveModel(): Model {
-    const topicAssistant = currentChat.value
-      ? appStore.assistants.find(assistant => assistant.id === currentChat.value?.assistantId)
-      : appStore.defaultAssistant
+    const assistantId = currentChat.value?.assistantId ?? activeAssistantId.value ?? appStore.defaultAssistant?.id
+    const topicAssistant = appStore.assistants.find(assistant => assistant.id === assistantId) ?? appStore.defaultAssistant
     const assistantModel = topicAssistant?.model
     const selected = assistantModel ? uiStore.models.find(model => model.id === assistantModel) : selectedModel.value
     const fallback = selected ?? uiStore.models[0] ?? selectedModel.value
@@ -434,14 +457,14 @@ export const useChatStore = defineStore('chat', () => {
   watch(draft, value => localStorage.setItem('orbit-draft', value))
 
   return {
-    activeChatId, messages, draft, replyingTo, replyingToMsgId, generating, attachments,
+    activeChatId, activeAssistantId, messages, draft, replyingTo, replyingToMsgId, generating, attachments,
     sidebarOpen, focusMode, inspectorVisible, inspectorOpen, modal, toast, undoAction, online, saving, saveError, nearBottom,
     commandQuery, promptDraft, selectedModel,
-    workspaces: uiStore.workspaces, models: uiStore.models, promptPresets: uiStore.promptPresets,
+    models: uiStore.models, promptPresets: uiStore.promptPresets,
     commands: uiStore.commands, filteredCommands: uiStore.filteredCommands, filteredCommandChats, searchResults,
     tabletBreakpoint: uiStore.tabletBreakpoint, mobileBreakpoint: uiStore.mobileBreakpoint,
-    currentChat, chats, canSend,
-    openConversation, newConversation, deleteConversation, clearConversation, renameTopic, togglePin, initApp,
+    currentChat, assistantTabs, chats, canSend,
+    assistantTopicCount, selectAssistant, openConversation, newConversation, deleteConversation, clearConversation, renameTopic, togglePin, initApp,
     sendMessage, stopGeneration, streamChat, copyMessage, rateMessage, regenerate, branchFrom, editMessage,
     searchMessages, exportTopicMarkdown, addFiles, removeAttachment,
     toggleFocusMode, toggleInspector, closeInspector, closeDrawers, showToast, selectModel, runCommand, savePrompt, handleResize, undo,

@@ -4,7 +4,7 @@ import { useChatStore } from '@/stores/chat'
 import { useAppStore } from '@/stores/app'
 import { Icon } from '@iconify/vue'
 import { MarkdownRenderer } from 'x-markdown-vue'
-import { Welcome, Thinking } from 'vue-element-plus-x'
+import { Thinking } from 'vue-element-plus-x'
 import 'x-markdown-vue/style'
 import type { ChatMessage, MessageBlock } from '@/types'
 
@@ -108,12 +108,9 @@ defineExpose({ scrollToBottom })
     <div ref="messageScroller" class="messages scroll" @scroll="handleScroll">
       <div class="message-list">
         <div v-if="store.messages.length === 0" class="empty-state">
-          <Welcome
-            icon="tabler:sparkles"
-            title="开始新对话"
-            description="输入消息或粘贴文件，AI 将为你解答"
-            variant="filled"
-          />
+          <span class="empty-icon"><Icon icon="tabler:sparkles" /></span>
+          <strong class="empty-title">开始新对话</strong>
+          <span class="empty-hint">输入消息或粘贴文件，AI 将为你解答</span>
         </div>
 
         <div v-else class="date-divider">今天</div>
@@ -152,7 +149,7 @@ defineExpose({ scrollToBottom })
                     <div v-if="message.loading && !block.content" class="typing">
                       <i /><i /><i />
                     </div>
-                    <MarkdownRenderer v-if="block.content" :markdown="block.content" />
+                    <MarkdownRenderer v-if="block.content" :markdown="block.content" :enable-shiki="false" />
                   </div>
 
                   <!-- Error block -->

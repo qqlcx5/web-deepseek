@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { CherryData } from '@/types/cherry-data'
 import { buildAppData } from '@/utils/data-import'
 import { buildExportJSON, validateReferences } from '@/utils/cherry-export'
+import { parseDataJSON } from '@/utils/cherry-parser'
 
 function createCherryFixture(): CherryData {
   return {
@@ -100,6 +101,33 @@ function createCherryFixture(): CherryData {
 }
 
 describe('Orbit data contract', () => {
+  it('normalizes JSON-stringified Cherry persist values before mapping', () => {
+    const fixture = createCherryFixture()
+    const text = JSON.stringify({
+      ...fixture,
+      localStorage: {
+        ...fixture.localStorage,
+        'persist:cherry-studio': JSON.stringify(fixture.localStorage['persist:cherry-studio']),
+      },
+    })
+
+    const parsed = parseDataJSON(text)
+
+    expect(parsed.ok).toBe(true)
+    if (!parsed.ok) throw new Error(parsed.error)
+    expect(parsed.providerCount).toBe(1)
+    expect(buildAppData(parsed.data!).topics).toHaveLength(2)
+  })
+
+  it('returns a structural error when llm is absent instead of throwing', () => {
+    const parsed = parseDataJSON(JSON.stringify({
+      localStorage: { 'persist:cherry-studio': {} },
+      indexedDB: {},
+    }))
+
+    expect(parsed).toMatchObject({ ok: false, error: expect.stringContaining('persist:cherry-studio.llm') })
+  })
+
   it('restores Topic metadata and Message block order from Cherry v5', () => {
     const data = buildAppData(createCherryFixture())
     const firstTopic = data.topics.find(topic => topic.id === 'topic-1')!
@@ -129,6 +157,17 @@ describe('Orbit data contract', () => {
     expect(restored.topics.map(topic => topic.assistantId)).toEqual(['assistant-1', 'assistant-2'])
     expect(restored.topics).toHaveLength(source.topics.length)
     expect(restored.topics[0]!.messages[0]!.blocks.map(block => block.id)).toEqual(['block-thinking', 'block-text', 'block-error'])
+  })
+
+  it('allows different Providers to expose the same model ID', () => {
+    const data = buildAppData(createCherryFixture())
+    data.providers.push({
+      ...data.providers[0]!,
+      id: 'provider-2',
+      name: 'Provider Two',
+    })
+
+    expect(validateReferences(data)).toMatchObject({ ok: true, errors: [] })
   })
 
   it('blocks export when data contains invalid entity references', () => {
