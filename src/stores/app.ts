@@ -36,10 +36,12 @@ export const useAppStore = defineStore('app', () => {
 
   const sortedTopics = computed(() => {
     return [...topics.value].sort((a, b) => {
+      // Pinned topics always first
       if (a.pinned && !b.pinned) return -1
       if (!a.pinned && b.pinned) return 1
-      const ta = new Date(a.createdAt ?? 0).getTime()
-      const tb = new Date(b.createdAt ?? 0).getTime()
+      // Then by updatedAt (most recent first)
+      const ta = new Date(a.updatedAt ?? a.createdAt ?? 0).getTime()
+      const tb = new Date(b.updatedAt ?? b.createdAt ?? 0).getTime()
       return tb - ta
     })
   })

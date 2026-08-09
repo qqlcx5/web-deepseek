@@ -1,10 +1,13 @@
 <script setup lang="ts">
-import { ref, nextTick } from 'vue'
+import { ref, nextTick, computed } from 'vue'
 import { useChatStore } from '@/stores/chat'
+import { useAppStore } from '@/stores/app'
 import { Icon } from '@iconify/vue'
 import { Attachments } from 'vue-element-plus-x'
+import { estimateTokens } from '@/utils/token-counter'
 
 const store = useChatStore()
+const appStore = useAppStore()
 const composer = ref<HTMLTextAreaElement | null>(null)
 const fileInput = ref<HTMLInputElement | null>(null)
 
@@ -19,6 +22,24 @@ function getAttachmentItems() {
   }))
 }
 
+// Token estimation
+const showTokenEstimate = computed(() => appStore.settings?.showInputEstimatedTokens ?? false)
+const estimatedTokens = computed(() => estimateTokens(store.draft))
+const tokenLabel = computed(() => {
+  const t = estimatedTokens.value
+  if (t < 1000) return `~${t} tokens`
+  return `~${(t / 1000).toFixed(1)}k tokens`
+})
+
+// Shortcut label
+const shortcutLabel = computed(() => {
+  const sc = appStore.settings?.sendShortcut ?? 'Enter'
+  if (sc === 'Enter') return 'Enter 发送 · Shift + Enter 换行'
+  if (sc === 'Ctrl+Enter') return 'Ctrl + Enter 发送 · Enter 换行'
+  if (sc === 'Shift+Enter') return 'Shift + Enter 发送 · Enter 换行'
+  return 'Enter 发送 · Shift + Enter 换行'
+})
+
 function resizeComposer() {
   if (!composer.value) return
   composer.value.style.height = 'auto'
@@ -26,13 +47,38 @@ function resizeComposer() {
 }
 
 function handleKeydown(e: KeyboardEvent) {
-  if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
-    e.preventDefault()
-    store.sendMessage()
-    nextTick(() => {
-      resizeComposer()
-      composer.value?.focus()
-    })
+  const shortcut = appStore.settings?.sendShortcut ?? 'Enter'
+
+  if (shortcut === 'Enter') {
+    // Enter sends, Shift+Enter for newline
+    if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
+      e.preventDefault()
+      store.sendMessage()
+      nextTick(() => {
+        resizeComposer()
+        composer.value?.focus()
+      })
+    }
+  } else if (shortcut === 'Ctrl+Enter') {
+    // Ctrl+Enter sends, Enter for newline
+    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && !e.isComposing) {
+      e.preventDefault()
+      store.sendMessage()
+      nextTick(() => {
+        resizeComposer()
+        composer.value?.focus()
+      })
+    }
+  } else if (shortcut === 'Shift+Enter') {
+    // Shift+Enter sends, Enter for newline
+    if (e.key === 'Enter' && e.shiftKey && !e.isComposing) {
+      e.preventDefault()
+      store.sendMessage()
+      nextTick(() => {
+        resizeComposer()
+        composer.value?.focus()
+      })
+    }
   }
 }
 
@@ -101,7 +147,10 @@ defineExpose({ composer, resizeComposer })
         <button class="icon-btn tooltip" data-tip="添加图片" @click="fileInput?.click()">
           <Icon icon="tabler:photo" />
         </button>
-        <span class="composer-hint">Enter 发送 · Shift + Enter 换行</span>
+        <span v-if="showTokenEstimate && store.draft.trim()" class="token-estimate">
+          {{ tokenLabel }}
+        </span>
+        <span class="composer-hint">{{ shortcutLabel }}</span>
 
         <button v-if="store.generating" class="send-btn stop" @click="store.stopGeneration()">
           <Icon icon="tabler:square" />
@@ -154,6 +203,11 @@ defineExpose({ composer, resizeComposer })
 }
 .composer textarea::placeholder { color: var(--faint); }
 .composer-toolbar { display: flex; min-height: 42px; align-items: center; gap: 2px; padding: 4px 7px 7px; }
+.token-estimate {
+  padding: 2px 6px; color: var(--faint); background: var(--surface-3);
+  border: 1px solid var(--line); border-radius: 4px; font-size: 9px;
+  white-space: nowrap;
+}
 .composer-hint { margin-left: auto; color: var(--faint); font-size: 9px; }
 .send-btn { display: flex; width: 32px; height: 32px; align-items: center; justify-content: center; margin-left: 6px; color: white; background: var(--brand); border-radius: 6px; border: 0; cursor: pointer; }
 .send-btn:disabled { color: var(--faint); background: var(--surface-3); cursor: not-allowed; }
@@ -168,6 +222,7 @@ defineExpose({ composer, resizeComposer })
   .composer-wrap { padding: 7px 8px max(7px, env(safe-area-inset-bottom)); }
   .composer { border-radius: 7px; }
   .composer-hint { display: none; }
+  .token-estimate { display: none; }
 }
 @media (max-width: 390px) {
   .composer-toolbar { padding-right: 5px; padding-left: 5px; }

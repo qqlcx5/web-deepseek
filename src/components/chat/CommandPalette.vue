@@ -1,10 +1,28 @@
 <script setup lang="ts">
-import { ref, nextTick, onMounted } from 'vue'
+import { ref, nextTick, onMounted, computed } from 'vue'
 import { useChatStore } from '@/stores/chat'
 import { Icon } from '@iconify/vue'
 
 const store = useChatStore()
 const input = ref<HTMLInputElement | null>(null)
+
+const searchResults = computed(() => store.searchResults)
+
+function openSearchResult(result: { topicId: string }) {
+  store.openConversation(result.topicId)
+  store.modal = ''
+}
+
+function highlightMatch(text: string, query: string): string {
+  if (!query) return text.slice(0, 120)
+  const idx = text.toLowerCase().indexOf(query.toLowerCase())
+  if (idx === -1) return text.slice(0, 120)
+  const start = Math.max(0, idx - 40)
+  const end = Math.min(text.length, idx + query.length + 80)
+  const prefix = start > 0 ? '...' : ''
+  const suffix = end < text.length ? '...' : ''
+  return prefix + text.slice(start, end) + suffix
+}
 
 onMounted(() => {
   nextTick(() => input.value?.focus())
@@ -18,13 +36,31 @@ onMounted(() => {
       <input
         ref="input"
         v-model="store.commandQuery"
-        placeholder="搜索对话、文件或输入命令"
+        placeholder="搜索对话、消息或输入命令"
         @keydown.esc="store.modal = ''"
       />
       <span class="shortcut">ESC</span>
     </div>
 
     <div class="command-results scroll">
+      <!-- Search results (when query matches messages) -->
+      <template v-if="searchResults.length">
+        <div class="command-group">消息搜索结果</div>
+        <button
+          v-for="result in searchResults"
+          :key="`${result.topicId}-${result.messageId}`"
+          class="command-item search-result-item"
+          @click="openSearchResult(result)"
+        >
+          <Icon icon="tabler:message-search" />
+          <span class="command-item-copy">
+            <span class="command-item-title">{{ result.topicName }}</span>
+            <span class="command-item-desc">{{ highlightMatch(result.content, store.commandQuery) }}</span>
+            <span class="command-item-time">{{ result.time }}</span>
+          </span>
+        </button>
+      </template>
+
       <div class="command-group">快捷操作</div>
       <button
         v-for="cmd in store.filteredCommands"
@@ -71,13 +107,15 @@ onMounted(() => {
 .command-search input { width: 100%; height: 52px; padding: 0 46px; border: 0; outline: 0; font-size: 13px; font-family: inherit; background: transparent; color: var(--text); }
 .command-results { max-height: 380px; overflow-y: auto; padding: 7px; }
 .command-group { padding: 7px 8px 5px; color: var(--faint); font-size: 9px; font-weight: 700; text-transform: uppercase; }
-.command-item { display: flex; width: 100%; min-height: 40px; align-items: center; gap: 10px; padding: 7px 9px; color: var(--text-secondary); background: transparent; border-radius: 5px; text-align: left; border: 0; cursor: pointer; }
+.command-item { display: flex; width: 100%; min-height: 40px; align-items: flex-start; gap: 10px; padding: 7px 9px; color: var(--text-secondary); background: transparent; border-radius: 5px; text-align: left; border: 0; cursor: pointer; }
 .command-item:hover { background: var(--surface-3); }
-.command-item :deep(svg) { width: 15px; color: var(--muted); }
+.command-item :deep(svg) { width: 15px; color: var(--muted); flex-shrink: 0; margin-top: 2px; }
 .command-item-copy { min-width: 0; flex: 1; }
 .command-item-title { display: block; font-size: 11px; font-weight: 650; color: var(--text); }
-.command-item-desc { display: block; overflow: hidden; margin-top: 2px; color: var(--faint); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
-.shortcut { margin-left: auto; padding: 2px 5px; color: var(--faint); background: var(--surface-3); border: 1px solid var(--line); border-radius: 4px; font-size: 10px; }
+.command-item-desc { display: block; overflow: hidden; margin-top: 2px; color: var(--faint); font-size: 9px; line-height: 1.4; }
+.command-item-time { display: block; margin-top: 3px; color: var(--faint); font-size: 8px; opacity: 0.7; }
+.search-result-item { min-height: 48px; }
+.shortcut { margin-left: auto; padding: 2px 5px; color: var(--faint); background: var(--surface-3); border: 1px solid var(--line); border-radius: 4px; font-size: 10px; flex-shrink: 0; }
 
 @media (max-width: 760px) {
   .dialog { top: auto; right: 0; bottom: 0; left: 0; width: 100%; max-height: 88dvh; border-right: 0; border-bottom: 0; border-left: 0; border-radius: 8px 8px 0 0; transform: none; }

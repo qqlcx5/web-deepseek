@@ -11,6 +11,9 @@ import ChatInspector from '@/components/chat/ChatInspector.vue'
 import CommandPalette from '@/components/chat/CommandPalette.vue'
 import ModelSelector from '@/components/chat/ModelSelector.vue'
 import PromptEditor from '@/components/chat/PromptEditor.vue'
+import SettingsPanel from '@/components/chat/SettingsPanel.vue'
+import ProviderSettings from '@/components/chat/ProviderSettings.vue'
+import AssistantSettings from '@/components/chat/AssistantSettings.vue'
 import ToastNotification from '@/components/chat/ToastNotification.vue'
 
 const store = useChatStore()
@@ -98,6 +101,9 @@ onUnmounted(() => {
       <CommandPalette v-if="store.modal === 'command'" />
       <ModelSelector v-if="store.modal === 'model'" />
       <PromptEditor v-if="store.modal === 'prompt'" />
+      <SettingsPanel v-if="store.modal === 'settings'" />
+      <ProviderSettings v-if="store.modal === 'provider'" />
+      <AssistantSettings v-if="store.modal === 'assistant'" />
       <ToastNotification />
     </div>
   </ConfigProvider>

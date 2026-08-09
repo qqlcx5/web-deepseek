@@ -101,6 +101,14 @@ function confirmRename() {
     >
       <Icon icon="tabler:layout-sidebar-right" />
     </button>
+
+    <button
+      class="icon-btn tooltip"
+      data-tip="设置"
+      @click="store.modal = 'settings'"
+    >
+      <Icon icon="tabler:settings" />
+    </button>
   </header>
 
   <div v-if="!store.online" class="network-banner">

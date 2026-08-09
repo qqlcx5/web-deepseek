@@ -1,10 +1,16 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useChatStore } from '@/stores/chat'
+import { useAppStore } from '@/stores/app'
 import { Icon } from '@iconify/vue'
 import { estimateTokens, estimateContextPercent } from '@/utils/token-counter'
+import type { ChatMessage } from '@/types'
 
 const store = useChatStore()
+const appStore = useAppStore()
+
+// ─── Settings-driven visibility ───
+const showTokens = computed(() => appStore.settings?.showTokens ?? true)
 
 const contextPercent = computed(() => {
   const ctxLen = store.selectedModel?.contextLength || 64000
@@ -22,17 +28,48 @@ const meterColor = computed(() => {
   return 'var(--danger)'
 })
 
-// Session stats
+// ─── Real usage from messages (if available) ───
+function getRealUsage(msg: ChatMessage) {
+  return msg.usage
+}
+
+// Sum of real usage from assistant messages
+const realInputTokens = computed(() => {
+  const usages = store.messages
+    .filter(m => m.role === 'assistant')
+    .map(m => getRealUsage(m))
+    .filter(Boolean)
+  if (usages.length === 0) return null
+  return usages.reduce((sum, u) => sum + (u?.prompt_tokens ?? 0), 0)
+})
+
+const realOutputTokens = computed(() => {
+  const usages = store.messages
+    .filter(m => m.role === 'assistant')
+    .map(m => getRealUsage(m))
+    .filter(Boolean)
+  if (usages.length === 0) return null
+  return usages.reduce((sum, u) => sum + (u?.completion_tokens ?? 0), 0)
+})
+
+const hasRealUsage = computed(() => realInputTokens.value !== null || realOutputTokens.value !== null)
+
+// Session stats — prefer real usage, fall back to estimates
 const inputTokens = computed(() =>
-  store.messages
-    .filter(m => m.role === 'user')
-    .reduce((sum, m) => sum + estimateTokens(m.content), 0),
+  hasRealUsage.value
+    ? realInputTokens.value!
+    : store.messages
+        .filter(m => m.role === 'user')
+        .reduce((sum, m) => sum + estimateTokens(m.content), 0),
 )
 const outputTokens = computed(() =>
-  store.messages
-    .filter(m => m.role === 'assistant')
-    .reduce((sum, m) => sum + estimateTokens(m.content) + estimateTokens(m.reasoningContent ?? ''), 0),
+  hasRealUsage.value
+    ? realOutputTokens.value!
+    : store.messages
+        .filter(m => m.role === 'assistant')
+        .reduce((sum, m) => sum + estimateTokens(m.content) + estimateTokens(m.reasoningContent ?? ''), 0),
 )
+const isRealUsage = computed(() => hasRealUsage.value)
 const estimatedCost = computed(() => {
   const pricing = store.selectedModel?.pricing
   if (!pricing) return '—'
@@ -63,7 +100,7 @@ const assistantCount = computed(() => store.messages.filter(m => m.role === 'ass
       </section>
 
       <!-- Context usage -->
-      <section class="panel-section">
+      <section v-if="showTokens" class="panel-section">
         <div class="panel-heading">上下文用量</div>
         <div class="meter-head">
           <span>{{ store.messages.length }} 条消息 · ~{{ tokenCount }} tokens</span>
@@ -116,8 +153,12 @@ const assistantCount = computed(() => store.messages.filter(m => m.role === 'ass
       </section>
 
       <!-- Session stats -->
-      <section class="panel-section">
-        <div class="panel-heading">会话消耗</div>
+      <section v-if="showTokens" class="panel-section">
+        <div class="panel-heading">
+          会话消耗
+          <span v-if="isRealUsage" class="usage-badge">真实</span>
+          <span v-else class="usage-badge estimate">估算</span>
+        </div>
         <div class="stats-grid">
           <div class="stat-item">
             <span class="stat-label">消息总数</span>
@@ -129,11 +170,11 @@ const assistantCount = computed(() => store.messages.filter(m => m.role === 'ass
           </div>
           <div class="stat-item">
             <span class="stat-label">输入 Token</span>
-            <span class="stat-value">~{{ inputTokens }}</span>
+            <span class="stat-value">{{ isRealUsage ? '' : '~' }}{{ inputTokens }}</span>
           </div>
           <div class="stat-item">
             <span class="stat-label">输出 Token</span>
-            <span class="stat-value">~{{ outputTokens }}</span>
+            <span class="stat-value">{{ isRealUsage ? '' : '~' }}{{ outputTokens }}</span>
           </div>
           <div class="stat-item">
             <span class="stat-label">预计费用</span>
@@ -182,6 +223,19 @@ const assistantCount = computed(() => store.messages.filter(m => m.role === 'ass
 .stat-item { display: flex; flex-direction: column; gap: 3px; padding: 8px; background: var(--surface); border: 1px solid var(--line); border-radius: 5px; }
 .stat-label { color: var(--faint); font-size: 9px; }
 .stat-value { color: var(--text); font-size: 14px; font-weight: 650; }
+
+.usage-badge {
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--success);
+  background: color-mix(in srgb, var(--success) 12%, transparent);
+}
+.usage-badge.estimate {
+  color: var(--warning);
+  background: color-mix(in srgb, var(--warning) 12%, transparent);
+}
 
 .icon-btn { display: inline-flex; width: 34px; height: 34px; flex: 0 0 34px; align-items: center; justify-content: center; border-radius: 6px; color: var(--muted); background: transparent; border: 0; cursor: pointer; transition: background 140ms, color 140ms; }
 .icon-btn:hover { color: var(--text); background: var(--surface-3); }

@@ -1,13 +1,63 @@
 <script setup lang="ts">
-import { ref, watch, nextTick } from 'vue'
+import { ref, watch, nextTick, computed } from 'vue'
 import { useChatStore } from '@/stores/chat'
+import { useAppStore } from '@/stores/app'
 import { Icon } from '@iconify/vue'
 import { MarkdownRenderer } from 'x-markdown-vue'
 import { Welcome, Thinking } from 'vue-element-plus-x'
 import 'x-markdown-vue/style'
+import type { ChatMessage, MessageBlock } from '@/types'
 
 const store = useChatStore()
+const appStore = useAppStore()
 const messageScroller = ref<HTMLElement | null>(null)
+
+// ─── Settings-driven style computeds ───
+const fontSize = computed(() => `${appStore.settings?.fontSize ?? 14}px`)
+const isPlainMode = computed(() => appStore.settings?.messageStyle === 'plain')
+const showMessageDivider = computed(() => appStore.settings?.showMessageDivider ?? false)
+const codeShowLineNumbers = computed(() => appStore.settings?.codeShowLineNumbers ?? false)
+const codeWrappable = computed(() => appStore.settings?.codeWrappable ?? false)
+
+// Dynamic CSS class for message styling
+const messageClass = computed(() => ({
+  'plain-mode': isPlainMode.value,
+  'show-divider': showMessageDivider.value,
+  'code-wrappable': codeWrappable.value,
+  'code-line-numbers': codeShowLineNumbers.value,
+}))
+
+// ─── Block helpers ───
+function getBlocks(message: ChatMessage): MessageBlock[] | null {
+  const blocks = message.blocks
+  if (blocks && blocks.length > 0) return blocks
+  return null
+}
+
+function hasUsage(message: ChatMessage): boolean {
+  return Boolean(message.usage)
+}
+
+function getUsage(message: ChatMessage) {
+  return message.usage
+}
+
+// Thinking collapse state per message
+const thinkingExpanded = ref<Record<string, boolean>>({})
+
+function isThinkingExpanded(messageId: string, isLoading: boolean): boolean {
+  // During loading, always expand
+  if (isLoading) return true
+  // After loading, check manual override; default collapsed
+  if (thinkingExpanded.value[messageId] !== undefined) {
+    return thinkingExpanded.value[messageId]
+  }
+  return false
+}
+
+function toggleThinking(messageId: string) {
+  thinkingExpanded.value[messageId] = !isThinkingExpanded(messageId, false)
+}
 
 function handleScroll() {
   if (!messageScroller.value) return
@@ -40,6 +90,14 @@ watch(
   },
 )
 
+// Also watch reasoning content updates
+watch(
+  () => store.messages.map(m => m.reasoningContent ?? '').join(''),
+  () => {
+    if (store.nearBottom) scrollToBottom()
+  },
+)
+
 nextTick(() => scrollToBottom())
 
 defineExpose({ scrollToBottom })
@@ -64,7 +122,7 @@ defineExpose({ scrollToBottom })
           v-for="message in store.messages"
           :key="message.id"
           class="message"
-          :class="message.role"
+          :class="[message.role, messageClass]"
         >
           <!-- Assistant message -->
           <template v-if="message.role === 'assistant'">
@@ -78,26 +136,84 @@ defineExpose({ scrollToBottom })
                 <span class="message-time">{{ message.time }}</span>
               </div>
 
-              <!-- Reasoning content (Thinking component) -->
-              <Thinking
-                v-if="message.reasoningContent"
-                :content="message.reasoningContent"
-                :status="message.loading ? 'thinking' : 'end'"
-                :auto-collapse="true"
-              />
+              <!-- Block-based rendering (if blocks exist) -->
+              <template v-if="getBlocks(message)">
+                <template v-for="(block, blockIdx) in getBlocks(message)" :key="block.id || blockIdx">
+                  <!-- Thinking block -->
+                  <Thinking
+                    v-if="block.type === 'thinking'"
+                    :content="block.content"
+                    :status="message.loading ? 'thinking' : 'end'"
+                    :auto-collapse="true"
+                  />
 
-              <div v-if="message.loading && !message.content" class="typing">
-                <i /><i /><i />
-              </div>
+                  <!-- Main text block -->
+                  <div v-else-if="block.type === 'main_text'" class="markdown" :style="{ fontSize }">
+                    <div v-if="message.loading && !block.content" class="typing">
+                      <i /><i /><i />
+                    </div>
+                    <MarkdownRenderer v-if="block.content" :markdown="block.content" />
+                  </div>
 
-              <div v-if="message.content" class="markdown">
-                <MarkdownRenderer :markdown="message.content" />
-              </div>
+                  <!-- Error block -->
+                  <div v-else-if="block.type === 'error'" class="message-error">
+                    <Icon icon="tabler:alert-circle" width="14" />
+                    {{ block.content }}
+                  </div>
 
-              <!-- Error indicator -->
-              <div v-if="message.error" class="message-error">
+                  <!-- Citation block -->
+                  <div v-else-if="block.type === 'citation'" class="citation-block">
+                    <div class="citation-title">
+                      <Icon icon="tabler:quote" width="14" />
+                      引用
+                    </div>
+                    <div class="citation-content">{{ block.content }}</div>
+                  </div>
+
+                  <!-- Tool block -->
+                  <div v-else-if="block.type === 'tool'" class="tool-block">
+                    <div class="tool-title">
+                      <Icon icon="tabler:tool" width="14" />
+                      工具调用
+                    </div>
+                    <pre class="tool-content">{{ block.content }}</pre>
+                  </div>
+                </template>
+              </template>
+
+              <!-- Fallback: legacy rendering (no blocks) -->
+              <template v-else>
+                <!-- Reasoning content (Thinking component) -->
+                <Thinking
+                  v-if="message.reasoningContent"
+                  :content="message.reasoningContent"
+                  :status="message.loading ? 'thinking' : 'end'"
+                  :auto-collapse="true"
+                />
+
+                <div v-if="message.loading && !message.content" class="typing">
+                  <i /><i /><i />
+                </div>
+
+                <div v-if="message.content" class="markdown" :style="{ fontSize }">
+                  <MarkdownRenderer :markdown="message.content" :enable-shiki="false" />
+                </div>
+              </template>
+
+              <!-- Error indicator (legacy, for messages without error block) -->
+              <div v-if="message.error && !getBlocks(message)?.some(b => b.type === 'error')" class="message-error">
                 <Icon icon="tabler:alert-circle" width="14" />
                 {{ message.error }}
+              </div>
+
+              <!-- Usage info -->
+              <div v-if="hasUsage(message) && !message.loading" class="message-usage">
+                <Icon icon="tabler:chart-bar" width="12" />
+                <span>输入 {{ getUsage(message)?.prompt_tokens ?? '?' }}</span>
+                <span class="usage-sep">/</span>
+                <span>输出 {{ getUsage(message)?.completion_tokens ?? '?' }}</span>
+                <span class="usage-sep">/</span>
+                <span>总计 {{ getUsage(message)?.total_tokens ?? '?' }} tokens</span>
               </div>
 
               <!-- Sources -->
@@ -305,6 +421,119 @@ defineExpose({ scrollToBottom })
   font-size: 12px; font-weight: 600; cursor: pointer;
 }
 .secondary:hover { background: var(--surface-2); }
+
+/* ─── Block-based styles ─── */
+
+.message-usage {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 8px;
+  padding: 4px 8px;
+  color: var(--faint);
+  background: var(--surface-2);
+  border-radius: 4px;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+.message-usage :deep(svg) { width: 11px; opacity: 0.7; }
+.usage-sep { opacity: 0.4; }
+
+.citation-block {
+  margin-top: 10px;
+  padding: 8px 10px;
+  background: var(--surface-2);
+  border-left: 3px solid var(--brand);
+  border-radius: 4px;
+}
+.citation-title {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+.citation-content {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.tool-block {
+  margin-top: 10px;
+  padding: 8px 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+.tool-title {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+.tool-content {
+  margin: 0;
+  padding: 8px;
+  color: var(--code-text);
+  background: var(--code-bg);
+  border-radius: 4px;
+  font-size: 11px;
+  line-height: 1.5;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+/* ─── Settings-driven styles ─── */
+
+/* Plain mode: remove bubble styling from user messages */
+.message.plain-mode .user-bubble {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  padding: 4px 0;
+}
+
+/* Show divider between messages */
+.message.show-divider {
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 20px;
+}
+
+/* Code block: wrappable (applied via message class) */
+.message.code-wrappable .markdown :deep(pre) {
+  white-space: pre-wrap !important;
+  word-break: break-word;
+}
+
+/* Code block: line numbers (applied via message class) */
+.message.code-line-numbers .markdown :deep(pre) {
+  counter-reset: line;
+  padding-left: 3.5em !important;
+}
+.message.code-line-numbers .markdown :deep(pre > code) {
+  counter-reset: line;
+  display: block;
+}
+.message.code-line-numbers .markdown :deep(pre > code > span) {
+  counter-increment: line;
+}
+.message.code-line-numbers .markdown :deep(pre > code > span::before) {
+  content: counter(line);
+  display: inline-block;
+  width: 2em;
+  margin-right: 1em;
+  margin-left: -3em;
+  color: var(--faint);
+  text-align: right;
+  user-select: none;
+}
 
 @media (max-width: 760px) {
   .message-list { padding: 22px 13px 125px; }

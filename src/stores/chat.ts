@@ -4,26 +4,18 @@
 
 import { defineStore } from 'pinia'
 import { ref, computed, watch } from 'vue'
-import type { ChatMessage, Attachment, ChatStreamDelta } from '@/types'
+import type { ChatMessage, Attachment, ChatStreamDelta, ModalType, MessageBlock } from '@/types'
 import { useAppStore } from './app'
 import { useUiStore } from './ui'
 import { chatApi, type ChatRequestParams } from '@/api/chat-api'
+import { estimateTokens } from '@/utils/token-counter'
 
-// ─── Message Block type (local definition, compatible with Cherry Studio) ───
-interface MessageBlock {
-  id?: string
-  type: 'main_text' | 'thinking' | 'error' | 'citation' | 'tool' | 'unknown'
+export interface SearchResult {
+  topicId: string
+  topicName: string
+  messageId: string | number
   content: string
-  status?: 'success' | 'error' | 'streaming' | 'processing'
-  createdAt?: string
-  citationReferences?: unknown[]
-}
-
-// ─── Usage type ───
-interface MessageUsage {
-  prompt_tokens?: number
-  completion_tokens?: number
-  total_tokens?: number
+  time: string
 }
 
 export const useChatStore = defineStore('chat', () => {
@@ -35,6 +27,7 @@ export const useChatStore = defineStore('chat', () => {
   const messages = ref<ChatMessage[]>([])
   const draft = ref(localStorage.getItem('orbit-draft') || '')
   const replyingTo = ref('')
+  const replyingToMsgId = ref<string | number | null>(null)
   const generating = ref(false)
   const abortController = ref<AbortController | null>(null)
   const attachments = ref<Attachment[]>([])
@@ -58,17 +51,29 @@ export const useChatStore = defineStore('chat', () => {
     Boolean(draft.value.trim() || attachments.value.length) && !generating.value,
   )
 
-  const sidebarOpen = computed(() => uiStore.sidebarOpen)
+  const sidebarOpen = computed({
+    get: () => uiStore.sidebarOpen,
+    set: (v: boolean) => { uiStore.sidebarOpen = v },
+  })
   const focusMode = computed(() => uiStore.focusMode)
   const inspectorVisible = computed(() => uiStore.inspectorVisible)
   const inspectorOpen = computed(() => uiStore.inspectorOpen)
-  const modal = computed(() => uiStore.modal)
+  const modal = computed({
+    get: () => uiStore.modal,
+    set: (v: ModalType) => { uiStore.modal = v },
+  })
   const toast = computed(() => uiStore.toast)
   const online = computed(() => uiStore.online)
   const saving = computed(() => uiStore.saving)
-  const nearBottom = computed(() => uiStore.nearBottom)
+  const nearBottom = computed({
+    get: () => uiStore.nearBottom,
+    set: (v: boolean) => { uiStore.nearBottom = v },
+  })
   const commandQuery = computed(() => uiStore.commandQuery)
-  const promptDraft = computed(() => uiStore.promptDraft)
+  const promptDraft = computed({
+    get: () => uiStore.promptDraft,
+    set: (v: string) => { uiStore.promptDraft = v },
+  })
   const selectedModel = computed(() => uiStore.selectedModel)
   const workspaces = computed(() => uiStore.workspaces)
   const models = computed(() => uiStore.models)
@@ -84,12 +89,34 @@ export const useChatStore = defineStore('chat', () => {
     ).slice(0, 5)
   })
 
+  // Search results for command palette
+  const searchResults = computed<SearchResult[]>(() => {
+    const q = uiStore.commandQuery.trim().toLowerCase()
+    if (!q || q.length < 1) return []
+    const results: SearchResult[] = []
+    for (const topic of appStore.topics) {
+      for (const msg of topic.messages) {
+        if (msg.content && msg.content.toLowerCase().includes(q)) {
+          results.push({
+            topicId: topic.id,
+            topicName: topic.name,
+            messageId: msg.id,
+            content: msg.content,
+            time: msg.time,
+          })
+          if (results.length >= 20) return results
+        }
+      }
+    }
+    return results
+  })
+
   // ─── Compat: forward UI store setters (so existing components work) ───
   function setSidebarOpen(v: boolean) { uiStore.sidebarOpen = v }
   function setFocusMode(v: boolean) { uiStore.focusMode = v }
   function setInspectorOpen(v: boolean) { uiStore.inspectorOpen = v }
   function setInspectorVisible(v: boolean) { uiStore.inspectorVisible = v }
-  function setModal(v: '' | 'command' | 'model' | 'prompt') { uiStore.modal = v }
+  function setModal(v: ModalType) { uiStore.modal = v }
   function setCommandQuery(v: string) { uiStore.commandQuery = v }
   function setPromptDraft(v: string) { uiStore.promptDraft = v }
   function setNearBottom(v: boolean) { uiStore.nearBottom = v }
@@ -123,6 +150,14 @@ export const useChatStore = defineStore('chat', () => {
     uiStore.showToast('对话已删除')
   }
 
+  function clearConversation(id: string) {
+    appStore.clearMessages(id)
+    if (activeChatId.value === id) {
+      messages.value = []
+    }
+    uiStore.showToast('对话已清空')
+  }
+
   function renameTopic(id: string, name: string) {
     appStore.renameTopic(id, name)
   }
@@ -154,10 +189,14 @@ export const useChatStore = defineStore('chat', () => {
 
     abortController.value = new AbortController()
 
-    // Gather provider info from selected model
+    // Gather provider info from selected model and appStore providers
     const selectedModel = uiStore.selectedModel
     const providers = appStore.providers
-    const provider = providers.find(p => p.id === selectedModel?.id?.split('-')[0])
+    // Match provider by model id prefix or by provider id
+    const provider = providers.find(p =>
+      p.models?.some(m => m.id === selectedModel?.id) ||
+      p.id === selectedModel?.id?.split('-')[0],
+    )
 
     const params: ChatRequestParams = {
       messages: messages.value
@@ -165,22 +204,24 @@ export const useChatStore = defineStore('chat', () => {
         .map(m => ({ role: m.role, content: m.content })),
       model: selectedModel?.id ?? 'deepseek-chat',
       signal: abortController.value.signal,
-      ...(provider?.apiHost && { apiHost: provider.apiHost }),
-      ...(provider?.apiKey && { apiKey: provider.apiKey }),
+      ...(provider?.apiHost && provider?.apiKey && {
+        provider: { apiHost: provider.apiHost, apiKey: provider.apiKey },
+      }),
     }
 
     // Helper: find or create a block of given type
     function findOrCreateBlock(type: MessageBlock['type']): MessageBlock {
-      let block = (assistantMsg.blocks as MessageBlock[]).find(b => b.type === type)
+      let block = (assistantMsg.blocks ?? []).find(b => b.type === type)
       if (!block) {
         block = {
           id: `block-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
           type,
           content: '',
           status: 'streaming',
-          createdAt: new Date().toISOString(),
+          createdAt: Date.now(),
         }
-        ;(assistantMsg.blocks as MessageBlock[]).push(block)
+        if (!assistantMsg.blocks) assistantMsg.blocks = []
+        assistantMsg.blocks.push(block)
       }
       return block
     }
@@ -222,17 +263,14 @@ export const useChatStore = defineStore('chat', () => {
             }
             // Parse usage from the final frame
             if (delta.usage) {
-              const usage: MessageUsage = {
+              assistantMsg.usage = {
                 prompt_tokens: delta.usage.prompt_tokens,
                 completion_tokens: delta.usage.completion_tokens,
                 total_tokens: delta.usage.total_tokens,
               }
-              // Store on message as usage field (using any to avoid type conflicts)
-              ;(assistantMsg as any).usage = usage
-              // Also sync to tokens field for compat
               assistantMsg.tokens = {
-                input: usage.prompt_tokens,
-                output: usage.completion_tokens,
+                input: delta.usage.prompt_tokens,
+                output: delta.usage.completion_tokens,
               }
             }
           } catch { /* skip malformed */ }
@@ -240,7 +278,7 @@ export const useChatStore = defineStore('chat', () => {
       }
 
       // Finalize all blocks
-      for (const block of (assistantMsg.blocks as MessageBlock[])) {
+      for (const block of assistantMsg.blocks ?? []) {
         if (block.status === 'streaming') {
           block.status = 'success'
         }
@@ -251,25 +289,22 @@ export const useChatStore = defineStore('chat', () => {
       if ((err as Error).name === 'AbortError') {
         assistantMsg.status = 'stopped'
         if (!assistantMsg.content) assistantMsg.content = '_生成已停止。_'
-        // Finalize blocks as stopped
-        for (const block of (assistantMsg.blocks as MessageBlock[])) {
-          if (block.status === 'streaming') {
-            block.status = 'success'
-          }
+        for (const block of assistantMsg.blocks ?? []) {
+          if (block.status === 'streaming') block.status = 'success'
         }
       } else {
         assistantMsg.status = 'error'
         assistantMsg.error = (err as Error).message
         assistantMsg.content = `请求失败：${(err as Error).message}`
-        // Create an error block
         const errorBlock: MessageBlock = {
           id: `block-err-${Date.now()}`,
           type: 'error',
           content: (err as Error).message,
           status: 'error',
-          createdAt: new Date().toISOString(),
+          createdAt: Date.now(),
         }
-        ;(assistantMsg.blocks as MessageBlock[]).push(errorBlock)
+        if (!assistantMsg.blocks) assistantMsg.blocks = []
+        assistantMsg.blocks.push(errorBlock)
       }
     } finally {
       assistantMsg.loading = false
@@ -310,10 +345,16 @@ export const useChatStore = defineStore('chat', () => {
           type: 'main_text',
           content,
           status: 'success',
-          createdAt: now,
+          createdAt: Date.now(),
         },
-      ] as any,
+      ],
     }
+
+    // Record parent branch index if replying to a specific message
+    if (replyingToMsgId.value) {
+      userMsg.parentBranchIndex = replyingToMsgId.value as number
+    }
+
     appStore.addMessage(topicId, userMsg)
     messages.value = [...messages.value, userMsg]
 
@@ -321,6 +362,7 @@ export const useChatStore = defineStore('chat', () => {
     draft.value = ''
     attachments.value = []
     replyingTo.value = ''
+    replyingToMsgId.value = null
     uiStore.saving = true
 
     // Create assistant placeholder
@@ -335,7 +377,7 @@ export const useChatStore = defineStore('chat', () => {
       createdAt: now,
       status: 'sending',
       loading: true,
-      blocks: [] as any,
+      blocks: [],
     }
     appStore.addMessage(topicId, assistantMsg)
     messages.value = [...messages.value, assistantMsg]
@@ -385,18 +427,49 @@ export const useChatStore = defineStore('chat', () => {
       msg.status = 'sending'
       msg.loading = true
       msg.error = undefined
+      msg.blocks = []
       messages.value = [...messages.value]
       // Re-stream
       abortController.value = new AbortController()
+
+      // Gather provider info
+      const selectedModel = uiStore.selectedModel
+      const providers = appStore.providers
+      const provider = providers.find(p =>
+        p.models?.some(m => m.id === selectedModel?.id) ||
+        p.id === selectedModel?.id?.split('-')[0],
+      )
+
       const params: ChatRequestParams = {
         messages: messages.value
           .slice(0, idx)
           .filter(m => m.status === 'complete' || m.status === 'stopped')
           .map(m => ({ role: m.role, content: m.content })),
-        model: uiStore.selectedModel?.id ?? 'deepseek-chat',
+        model: selectedModel?.id ?? 'deepseek-chat',
         signal: abortController.value.signal,
+        ...(provider?.apiHost && provider?.apiKey && {
+          provider: { apiHost: provider.apiHost, apiKey: provider.apiKey },
+        }),
       }
       generating.value = true
+
+      // Helper for block management
+      function findOrCreateBlock(type: MessageBlock['type']): MessageBlock {
+        let block = (msg.blocks ?? []).find(b => b.type === type)
+        if (!block) {
+          block = {
+            id: `block-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            type,
+            content: '',
+            status: 'streaming',
+            createdAt: Date.now(),
+          }
+          if (!msg.blocks) msg.blocks = []
+          msg.blocks.push(block)
+        }
+        return block
+      }
+
       chatApi.chatStream(params).then(async (stream) => {
         const reader = stream.getReader()
         const decoder = new TextDecoder()
@@ -415,18 +488,54 @@ export const useChatStore = defineStore('chat', () => {
               if (json === '[DONE]') continue
               try {
                 const delta = JSON.parse(json) as ChatStreamDelta
-                if (delta.reasoning_content) msg.reasoningContent += delta.reasoning_content
-                if (delta.content) msg.content += delta.content
+                if (delta.reasoning_content) {
+                  msg.reasoningContent = (msg.reasoningContent ?? '') + delta.reasoning_content
+                  const block = findOrCreateBlock('thinking')
+                  block.content += delta.reasoning_content
+                  block.status = 'streaming'
+                }
+                if (delta.content) {
+                  msg.content += delta.content
+                  const block = findOrCreateBlock('main_text')
+                  block.content += delta.content
+                  block.status = 'streaming'
+                }
+                if (delta.usage) {
+                  msg.usage = {
+                    prompt_tokens: delta.usage.prompt_tokens,
+                    completion_tokens: delta.usage.completion_tokens,
+                    total_tokens: delta.usage.total_tokens,
+                  }
+                  msg.tokens = {
+                    input: delta.usage.prompt_tokens,
+                    output: delta.usage.completion_tokens,
+                  }
+                }
               } catch { /* skip */ }
             }
+          }
+          for (const block of msg.blocks ?? []) {
+            if (block.status === 'streaming') block.status = 'success'
           }
           msg.status = 'complete'
         } catch (err) {
           if ((err as Error).name === 'AbortError') {
             msg.status = 'stopped'
+            for (const block of msg.blocks ?? []) {
+              if (block.status === 'streaming') block.status = 'success'
+            }
           } else {
             msg.status = 'error'
             msg.error = (err as Error).message
+            const errorBlock: MessageBlock = {
+              id: `block-err-${Date.now()}`,
+              type: 'error',
+              content: (err as Error).message,
+              status: 'error',
+              createdAt: Date.now(),
+            }
+            if (!msg.blocks) msg.blocks = []
+            msg.blocks.push(errorBlock)
           }
         } finally {
           msg.loading = false
@@ -440,12 +549,84 @@ export const useChatStore = defineStore('chat', () => {
 
   function branchFrom(msg: ChatMessage) {
     replyingTo.value = msg.content.slice(0, 42)
+    replyingToMsgId.value = msg.id
     uiStore.showToast('下一条消息将在新分支中发送')
   }
 
   function editMessage(msg: ChatMessage) {
     draft.value = msg.content
     replyingTo.value = '编辑历史消息后重新发送'
+  }
+
+  // ─── Search Messages ───
+  function searchMessages(query: string): SearchResult[] {
+    const q = query.trim().toLowerCase()
+    if (!q) return []
+    const results: SearchResult[] = []
+    for (const topic of appStore.topics) {
+      for (const msg of topic.messages) {
+        if (msg.content && msg.content.toLowerCase().includes(q)) {
+          results.push({
+            topicId: topic.id,
+            topicName: topic.name,
+            messageId: msg.id,
+            content: msg.content,
+            time: msg.time,
+          })
+          if (results.length >= 50) return results
+        }
+      }
+    }
+    return results
+  }
+
+  // ─── Export Topic as Markdown ───
+  function exportTopicMarkdown(id: string): string {
+    const topic = appStore.topicById(id)
+    if (!topic) {
+      uiStore.showToast('未找到对话')
+      return ''
+    }
+
+    const lines: string[] = []
+    lines.push(`# ${topic.name}`)
+    lines.push('')
+    lines.push(`> 导出时间：${new Date().toLocaleString('zh-CN')}`)
+    if (topic.model) lines.push(`> 模型：${topic.model}`)
+    lines.push('')
+
+    for (const msg of topic.messages) {
+      const role = msg.role === 'user' ? '🧑 用户' : msg.role === 'assistant' ? '🤖 助手' : '系统'
+      const time = msg.time ? new Date(msg.time).toLocaleString('zh-CN') : ''
+      lines.push(`## ${role}${time ? ` · ${time}` : ''}`)
+      lines.push('')
+      lines.push(msg.content || '_(空消息)_')
+      if (msg.reasoningContent) {
+        lines.push('')
+        lines.push('<details><summary>推理过程</summary>')
+        lines.push('')
+        lines.push(msg.reasoningContent)
+        lines.push('')
+        lines.push('</details>')
+      }
+      lines.push('')
+      lines.push('---')
+      lines.push('')
+    }
+
+    const markdown = lines.join('\n')
+
+    // Trigger download
+    const blob = new Blob([markdown], { type: 'text/markdown;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${topic.name.replace(/[<>:"/\\|?*]/g, '_')}.md`
+    a.click()
+    URL.revokeObjectURL(url)
+
+    uiStore.showToast('对话已导出为 Markdown')
+    return markdown
   }
 
   // ─── Attachments ───
@@ -490,6 +671,11 @@ export const useChatStore = defineStore('chat', () => {
       uiStore.modal = ''
       return
     }
+    if (cmd.action === 'export') {
+      exportTopicMarkdown(activeChatId.value ?? '')
+      uiStore.modal = ''
+      return
+    }
     uiStore.runCommand(cmd)
   }
   function savePrompt() { uiStore.savePrompt() }
@@ -522,19 +708,21 @@ export const useChatStore = defineStore('chat', () => {
   // ─── Expose ───
   return {
     // State (own)
-    activeChatId, messages, draft, replyingTo, generating, attachments,
+    activeChatId, messages, draft, replyingTo, replyingToMsgId, generating, attachments,
     // State (forwarded from uiStore as computeds)
     sidebarOpen, focusMode, inspectorVisible, inspectorOpen,
     modal, toast, online, saving, nearBottom, commandQuery,
     promptDraft, selectedModel, workspaces, models,
     promptPresets, commands, filteredCommands, filteredCommandChats,
+    searchResults,
     // Getters
     currentChat, chats, canSend,
     // Conversation
-    openConversation, newConversation, deleteConversation, renameTopic, togglePin, initApp,
+    openConversation, newConversation, deleteConversation, clearConversation, renameTopic, togglePin, initApp,
     // Messaging
     sendMessage, stopGeneration, streamChat,
     copyMessage, rateMessage, regenerate, branchFrom, editMessage,
+    searchMessages, exportTopicMarkdown,
     // Attachments
     addFiles, removeAttachment,
     // UI delegates
@@ -545,5 +733,7 @@ export const useChatStore = defineStore('chat', () => {
     // Compat setters
     setSidebarOpen, setFocusMode, setInspectorOpen, setInspectorVisible,
     setModal, setCommandQuery, setPromptDraft, setNearBottom,
+    // Token estimation helper exposed for components
+    estimateTokens,
   }
 })

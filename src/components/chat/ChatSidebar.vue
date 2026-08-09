@@ -102,6 +102,10 @@ if (typeof document !== 'undefined') {
           <Icon icon="tabler:download" width="14" />
           导出
         </button>
+        <button class="data-btn tooltip" data-tip="设置" @click="store.modal = 'settings'">
+          <Icon icon="tabler:settings" width="14" />
+          设置
+        </button>
         <input ref="fileInput" type="file" hidden accept=".json" @change="handleImport" />
       </div>
     </div>

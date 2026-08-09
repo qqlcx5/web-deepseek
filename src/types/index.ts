@@ -296,7 +296,7 @@ export interface Settings {
 
 // ─── UI Types ─────────────────────────────────────────────────────────────────
 
-export type ModalType = '' | 'command' | 'model' | 'prompt'
+export type ModalType = '' | 'command' | 'model' | 'prompt' | 'settings' | 'provider' | 'assistant'
 
 export interface Command {
   title: string
