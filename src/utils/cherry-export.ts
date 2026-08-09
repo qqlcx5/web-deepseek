@@ -96,7 +96,7 @@ export function validateReferences(data: AppData): ValidationResult {
       ? data.providers.some(provider => provider.models.some(model => model.id === assistant.model))
       : true
     if (!modelExists) {
-      errors.push(`Assistant “${assistant.name}”引用了不存在的模型：${assistant.model}`)
+      warnings.push(`Assistant “${assistant.name}”引用了不存在的模型：${assistant.model}（导出时将保留引用，但该模型不会被其他客户端识别）`)
     }
   }
 

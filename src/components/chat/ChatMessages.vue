@@ -443,7 +443,7 @@ defineExpose({ scrollToBottom })
 .markdown :deep(th) { background: var(--surface-3); }
 .markdown :deep(blockquote) { margin: 12px 0; padding: 7px 11px; color: var(--muted); background: var(--surface-2); border-left: 3px solid var(--brand); }
 .markdown :deep(code:not(pre code)) { padding: 2px 5px; color: var(--brand); background: var(--brand-soft); border-radius: 4px; font-size: 0.9em; }
-.markdown :deep(pre) { position: relative; overflow: auto; margin: 12px 0; padding: 35px 13px 13px; color: var(--code-text); background: var(--code-bg); border-radius: 7px; font-size: 12px; line-height: 1.6; }
+/* .markdown :deep(pre) { position: relative; overflow: auto; margin: 12px 0; padding: 35px 13px 13px; color: var(--code-text); background: var(--code-bg); border-radius: 7px; font-size: 12px; line-height: 1.6; } */
 
 .message-error {
   display: flex;

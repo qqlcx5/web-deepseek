@@ -54,5 +54,12 @@ export default defineConfig(({ mode }) => {
         },
       },
     },
+    optimizeDeps: {
+      include: [
+        'x-markdown-vue',
+        'shiki',
+        'shiki-stream',
+      ],
+    },
   }
 })

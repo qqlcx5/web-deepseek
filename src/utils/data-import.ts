@@ -141,11 +141,11 @@ export function mapAssistants(
     .filter((assistant): assistant is CherryAssistant => Boolean(assistant?.id))
     .map(assistant => mapAssistant(assistant, assistant.id === defaultId, now))
 
-  const assistants = uniqueById(all)
-  if (assistants.length > 0 && !assistants.some(assistant => assistant.isDefault)) {
-    assistants[0]!.isDefault = true
+  const uniqueAssistants = uniqueById(all)
+  if (uniqueAssistants.length > 0 && !uniqueAssistants.some(assistant => assistant.isDefault)) {
+    uniqueAssistants[0]!.isDefault = true
   }
-  return assistants
+  return uniqueAssistants
 }
 
 function buildTopicRefIndex(
@@ -308,6 +308,15 @@ export function buildAppData(cherry: CherryData): AppData {
   const defaultAssistantId = assistants.find(assistant => assistant.isDefault)?.id ?? assistants[0]?.id
   const topicRefs = buildTopicRefIndex(persist.assistants.assistants, persist.assistants.defaultAssistant)
   const blockById = new Map((indexedDB.message_blocks ?? []).map(block => [block.id, block]))
+
+  // Sanitize assistant model references: clear model field if the model ID
+  // doesn't exist in any provider's model list. This prevents dangling refs.
+  const allModelIds = new Set(providers.flatMap(provider => provider.models.map(model => model.id)))
+  for (const assistant of assistants) {
+    if (assistant.model && !allModelIds.has(assistant.model)) {
+      assistant.model = undefined
+    }
+  }
 
   const topics: Topic[] = (indexedDB.topics ?? []).map(source => {
     const ref = topicRefs.get(source.id)
