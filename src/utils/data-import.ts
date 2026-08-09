@@ -101,6 +101,7 @@ export function mapProviders(source: CherryProvider[] | undefined): Provider[] {
     apiHost: provider.apiHost ?? provider.apiURL ?? '',
     apiKey: provider.apiKey,
     enabled: provider.enabled ?? true,
+    isSystem: provider.isSystem,
     models: uniqueById((provider.models ?? []).filter(model => model.id && model.name).map((model): ModelInfo => ({
       id: model.id,
       name: model.name,
@@ -256,7 +257,7 @@ function mapSettings(source: Record<string, unknown> | undefined): Settings {
     typeof raw[key] === 'string' ? raw[key] : fallback
 
   const language = raw.language === 'en-US' ? 'en-US' : 'zh-CN'
-  const theme = raw.theme === 'dark' || raw.theme === 'auto' ? raw.theme : 'light'
+  const theme = raw.theme === 'dark' || raw.theme === 'auto' || raw.theme === 'system' ? (raw.theme === 'system' ? 'auto' : raw.theme) : 'light'
   const sendShortcut = raw.sendMessageShortcut === 'Ctrl+Enter' || raw.sendMessageShortcut === 'Shift+Enter'
     ? raw.sendMessageShortcut
     : 'Enter'

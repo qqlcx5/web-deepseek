@@ -123,47 +123,45 @@ function close() {
 </script>
 
 <template>
-  <section class="dialog settings-dialog">
-    <header class="dialog-head">
-      <div>
-        <div class="dialog-title">设置</div>
-        <div class="dialog-subtitle">管理应用偏好设置</div>
-      </div>
-      <button class="icon-btn" @click="close">
-        <Icon icon="tabler:x" />
-      </button>
-    </header>
-
-    <div class="dialog-body scroll">
-      <section class="panel-section management-section">
-        <div class="panel-heading">
-          <Icon icon="tabler:tool" width="14" />
+  <el-drawer
+    :model-value="uiStore.modal === 'settings'"
+    title="设置"
+    direction="rtl"
+    size="480px"
+    @close="close"
+  >
+    <div class="settings-body">
+      <!-- Management shortcuts -->
+      <div class="management-section">
+        <div class="section-title">
+          <Icon icon="tabler:tool" width="15" />
           模型与助手
         </div>
         <div class="management-grid">
-          <button
+          <div
             v-for="action in managementActions"
             :key="action.modal"
             class="management-action"
             @click="uiStore.modal = action.modal"
           >
-            <Icon :icon="`tabler:${action.icon}`" width="16" />
-            <span class="management-copy">
-              <span>{{ action.label }}</span>
-              <small>{{ action.description }}</small>
-            </span>
-            <Icon icon="tabler:chevron-right" width="14" />
-          </button>
+            <Icon :icon="`tabler:${action.icon}`" width="18" />
+            <div class="management-copy">
+              <span class="management-label">{{ action.label }}</span>
+              <span class="management-desc">{{ action.description }}</span>
+            </div>
+            <Icon icon="tabler:chevron-right" width="16" />
+          </div>
         </div>
-      </section>
+      </div>
 
-      <section
+      <!-- Setting groups -->
+      <div
         v-for="group in groups"
         :key="group.title"
-        class="panel-section"
+        class="setting-group"
       >
-        <div class="panel-heading">
-          <Icon :icon="`tabler:${group.icon}`" width="14" />
+        <div class="section-title">
+          <Icon :icon="`tabler:${group.icon}`" width="15" />
           {{ group.title }}
         </div>
 
@@ -172,106 +170,139 @@ function close() {
           :key="String(item.key)"
           class="setting-row"
         >
-          <label class="setting-label">{{ item.label }}</label>
+          <span class="setting-label">{{ item.label }}</span>
 
-          <label v-if="item.type === 'toggle'" class="toggle">
-            <input
-              type="checkbox"
-              :checked="Boolean(settings[item.key])"
-              @change="updateSetting(item.key, ($event.target as HTMLInputElement).checked)"
-            />
-            <span class="toggle-slider" />
-          </label>
-
-          <select
-            v-else-if="item.type === 'select'"
-            :value="String(settings[item.key] ?? '')"
-            class="setting-select"
-            @change="updateSetting(item.key, ($event.target as HTMLSelectElement).value)"
-          >
-            <option value="">未设置</option>
-            <option v-for="opt in item.options" :key="opt.value" :value="opt.value">
-              {{ opt.label }}
-            </option>
-          </select>
-
-          <input
-            v-else-if="item.type === 'number'"
-            type="number"
-            :value="settings[item.key] as number ?? ''"
-            :placeholder="item.placeholder"
-            class="setting-input"
-            @change="updateSetting(item.key, Number(($event.target as HTMLInputElement).value))"
+          <el-switch
+            v-if="item.type === 'toggle'"
+            :model-value="Boolean(settings[item.key])"
+            @change="(val: boolean) => updateSetting(item.key, val)"
           />
 
-          <input
-            v-else-if="item.type === 'input'"
-            type="text"
-            :value="String(settings[item.key] ?? '')"
+          <el-select
+            v-else-if="item.type === 'select'"
+            :model-value="String(settings[item.key] ?? '')"
+            size="small"
+            style="width: 140px;"
+            @change="(val: string) => updateSetting(item.key, val)"
+          >
+            <el-option value="" label="未设置" />
+            <el-option
+              v-for="opt in item.options"
+              :key="opt.value"
+              :value="opt.value"
+              :label="opt.label"
+            />
+          </el-select>
+
+          <el-input-number
+            v-else-if="item.type === 'number'"
+            :model-value="settings[item.key] as number ?? 0"
             :placeholder="item.placeholder"
-            class="setting-input"
-            @change="updateSetting(item.key, ($event.target as HTMLInputElement).value)"
+            size="small"
+            controls-position="right"
+            style="width: 120px;"
+            @change="(val: number) => updateSetting(item.key, val)"
+          />
+
+          <el-input
+            v-else-if="item.type === 'input'"
+            :model-value="String(settings[item.key] ?? '')"
+            :placeholder="item.placeholder"
+            size="small"
+            style="width: 140px;"
+            @change="(val: string) => updateSetting(item.key, val)"
           />
         </div>
-      </section>
+      </div>
     </div>
-  </section>
+  </el-drawer>
 </template>
 
 <style scoped>
-.settings-dialog {
-  position: fixed; z-index: 80; top: 50%; left: 50%;
-  width: min(520px, calc(100vw - 28px));
-  max-height: min(680px, calc(100dvh - 28px));
-  display: flex; flex-direction: column;
-  overflow: hidden; background: var(--surface); border: 1px solid var(--line);
-  border-radius: 8px; box-shadow: var(--shadow-lg);
-  transform: translate(-50%, -50%);
+.settings-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
-.dialog-head { display: flex; gap: 12px; padding: 14px 16px; border-bottom: 1px solid var(--line); flex-shrink: 0; }
-.dialog-title { font-size: 13px; font-weight: 750; color: var(--text); }
-.dialog-subtitle { margin-top: 3px; color: var(--faint); font-size: 10px; }
-.dialog-head .icon-btn { margin-top: -4px; }
-.dialog-body { padding: 12px 16px; overflow-y: auto; }
 
-.panel-section { padding: 3px 0 15px; border-bottom: 1px solid var(--line); }
-.panel-section + .panel-section { padding-top: 15px; }
-.panel-section:last-child { border-bottom: 0; }
-.panel-heading { display: flex; align-items: center; gap: 6px; margin-bottom: 9px; color: var(--text-secondary); font-size: 11px; font-weight: 700; }
-.management-grid { display: grid; gap: 6px; }
-.management-action { display: flex; width: 100%; min-width: 0; align-items: center; gap: 9px; padding: 8px; color: var(--text-secondary); background: var(--surface-2); border: 1px solid var(--line); border-radius: 6px; text-align: left; cursor: pointer; }
-.management-action:hover { color: var(--text); border-color: var(--brand); }
-.management-action > :first-child { color: var(--brand); flex: 0 0 auto; }
-.management-action > :last-child { color: var(--faint); flex: 0 0 auto; }
-.management-copy { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 2px; font-size: 11px; font-weight: 650; }
-.management-copy small { overflow: hidden; color: var(--faint); font-size: 9px; font-weight: 400; text-overflow: ellipsis; white-space: nowrap; }
-
-.setting-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 0; }
-.setting-label { font-size: 11px; color: var(--text-secondary); }
-
-.setting-select {
-  height: 28px; padding: 0 6px; color: var(--text); background: var(--surface-2);
-  border: 1px solid var(--line); border-radius: 5px; font-size: 10px; outline: 0; min-width: 120px;
+.section-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--el-text-color-secondary);
+  margin-bottom: 10px;
 }
-.setting-select:focus { border-color: var(--brand); }
-.setting-input {
-  height: 28px; width: 100px; padding: 0 6px; color: var(--text); background: var(--surface-2);
-  border: 1px solid var(--line); border-radius: 5px; font-size: 10px; outline: 0;
+
+.management-section {
+  margin-bottom: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--el-border-color-lighter);
 }
-.setting-input:focus { border-color: var(--brand); }
+.management-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.management-action {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  background: var(--el-fill-color-light);
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+.management-action:hover {
+  border-color: var(--el-color-primary);
+}
+.management-action > :first-child {
+  color: var(--el-color-primary);
+  flex-shrink: 0;
+}
+.management-action > :last-child {
+  color: var(--el-text-color-placeholder);
+  flex-shrink: 0;
+}
+.management-copy {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+.management-label {
+  font-size: 13px;
+  font-weight: 600;
+}
+.management-desc {
+  font-size: 11px;
+  color: var(--el-text-color-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
-.toggle { position: relative; display: inline-block; width: 32px; height: 18px; flex-shrink: 0; cursor: pointer; }
-.toggle input { opacity: 0; width: 0; height: 0; }
-.toggle-slider { position: absolute; inset: 0; background: var(--line-strong); border-radius: 999px; transition: 140ms; }
-.toggle-slider::before { content: ''; position: absolute; width: 14px; height: 14px; top: 2px; left: 2px; background: white; border-radius: 50%; transition: 140ms; }
-.toggle input:checked + .toggle-slider { background: var(--brand); }
-.toggle input:checked + .toggle-slider::before { transform: translateX(14px); }
+.setting-group {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--el-border-color-lighter);
+}
+.setting-group:last-child {
+  border-bottom: none;
+}
 
-.icon-btn { display: inline-flex; width: 34px; height: 34px; flex: 0 0 34px; align-items: center; justify-content: center; border-radius: 6px; color: var(--muted); background: transparent; border: 0; cursor: pointer; transition: background 140ms, color 140ms; }
-.icon-btn:hover { color: var(--text); background: var(--surface-3); }
-.icon-btn :deep(svg) { width: 17px; height: 17px; }
-
-@media (max-width: 760px) {
-  .settings-dialog { top: auto; right: 0; bottom: 0; left: 0; width: 100%; max-height: 88dvh; border-right: 0; border-bottom: 0; border-left: 0; border-radius: 8px 8px 0 0; transform: none; }
+.setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+}
+.setting-label {
+  font-size: 13px;
+  color: var(--el-text-color-primary);
 }
 </style>

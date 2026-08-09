@@ -8,6 +8,8 @@ export interface Provider {
   apiKey?: string
   models: ModelInfo[]
   enabled: boolean
+  isSystem?: boolean
+  apiVersion?: string
 }
 
 export interface ModelInfo {

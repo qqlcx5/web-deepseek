@@ -216,7 +216,6 @@ export const useAppStore = defineStore('app', () => {
   function validateProvider(provider: Provider): MutationResult {
     if (!provider.id.trim()) return { ok: false, error: 'Provider ID 不能为空。' }
     if (!provider.name.trim()) return { ok: false, error: 'Provider 名称不能为空。' }
-    if (!provider.apiHost.trim()) return { ok: false, error: 'API Host 不能为空。' }
 
     const seenModelIds = new Set<string>()
     for (const model of provider.models) {

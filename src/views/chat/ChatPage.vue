@@ -97,7 +97,7 @@ onUnmounted(() => {
         </button>
       </nav>
 
-      <div v-if="store.modal" class="overlay" @click="store.modal = ''" />
+      <div v-if="store.modal && store.modal !== 'provider' && store.modal !== 'settings' && store.modal !== 'assistant'" class="overlay" @click="store.modal = ''" />
       <CommandPalette v-if="store.modal === 'command'" />
       <ModelSelector v-if="store.modal === 'model'" />
       <PromptEditor v-if="store.modal === 'prompt'" />

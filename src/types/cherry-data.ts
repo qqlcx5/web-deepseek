@@ -45,6 +45,8 @@ export interface CherryProvider {
   apiURL?: string
   models?: CherryModel[]
   enabled?: boolean
+  isSystem?: boolean
+  type?: string
 }
 
 export interface CherryModel {
