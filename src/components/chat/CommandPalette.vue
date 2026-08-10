@@ -1,16 +1,18 @@
 <script setup lang="ts">
 import { ref, nextTick, onMounted, computed } from 'vue'
 import { useChatStore } from '@/stores/chat'
+import { useUiStore } from '@/stores/ui'
 import { Icon } from '@iconify/vue'
 
 const store = useChatStore()
+const uiStore = useUiStore()
 const input = ref<HTMLInputElement | null>(null)
 
 const searchResults = computed(() => store.searchResults)
 
 function openSearchResult(result: { topicId: string }) {
   store.openConversation(result.topicId)
-  store.modal = ''
+  uiStore.modal = ''
 }
 
 function highlightMatch(text: string, query: string): string {
@@ -35,9 +37,9 @@ onMounted(() => {
       <Icon icon="tabler:search" />
       <input
         ref="input"
-        v-model="store.commandQuery"
+        v-model="uiStore.commandQuery"
         placeholder="搜索对话、消息或输入命令"
-        @keydown.esc="store.modal = ''"
+        @keydown.esc="uiStore.modal = ''"
       />
       <span class="shortcut">ESC</span>
     </div>
@@ -55,7 +57,7 @@ onMounted(() => {
           <Icon icon="tabler:message-search" />
           <span class="command-item-copy">
             <span class="command-item-title">{{ result.topicName }}</span>
-            <span class="command-item-desc">{{ highlightMatch(result.content, store.commandQuery) }}</span>
+            <span class="command-item-desc">{{ highlightMatch(result.content, uiStore.commandQuery) }}</span>
             <span class="command-item-time">{{ result.time }}</span>
           </span>
         </button>
@@ -63,7 +65,7 @@ onMounted(() => {
 
       <div class="command-group">快捷操作</div>
       <button
-        v-for="cmd in store.filteredCommands"
+        v-for="cmd in uiStore.filteredCommands"
         :key="cmd.title"
         class="command-item"
         @click="store.runCommand(cmd)"
@@ -81,7 +83,7 @@ onMounted(() => {
         v-for="chat in store.filteredCommandChats"
         :key="chat.id"
         class="command-item"
-        @click="store.openConversation(chat.id); store.modal = ''"
+        @click="store.openConversation(chat.id); uiStore.modal = ''"
       >
         <Icon icon="tabler:message" />
         <span class="command-item-copy">

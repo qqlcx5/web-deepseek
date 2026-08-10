@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted } from 'vue'
 import { useChatStore } from '@/stores/chat'
+import { useUiStore } from '@/stores/ui'
+import { useKeyboardShortcuts } from '@/composables/useKeyboard'
 import { ConfigProvider } from 'vue-element-plus-x'
 import { Icon } from '@iconify/vue'
 import ChatSidebar from '@/components/chat/ChatSidebar.vue'
@@ -17,27 +19,9 @@ import AssistantSettings from '@/components/chat/AssistantSettings.vue'
 import ToastNotification from '@/components/chat/ToastNotification.vue'
 
 const store = useChatStore()
-
-function handleResize() {
-  const { tabletBreakpoint, focusMode } = store
-  if (window.innerWidth > tabletBreakpoint && !focusMode) {
-    store.inspectorVisible = true
-    store.inspectorOpen = false
-  } else {
-    store.inspectorVisible = false
-  }
-  if (window.innerWidth > store.mobileBreakpoint) {
-    store.sidebarOpen = false
-  }
-}
-
-function handleKeydown(e: KeyboardEvent) {
-  const meta = e.metaKey || e.ctrlKey
-  if (meta && e.key.toLowerCase() === 'k') { e.preventDefault(); store.modal = 'command' }
-  if (meta && e.key.toLowerCase() === 'n') { e.preventDefault(); store.newConversation() }
-  if (meta && e.shiftKey && e.key.toLowerCase() === 'f') { e.preventDefault(); store.toggleFocusMode() }
-  if (e.key === 'Escape') { store.modal = ''; store.closeDrawers() }
-}
+const uiStore = useUiStore()
+const { handleKeydown } = useKeyboardShortcuts(uiStore, { newConversation: store.newConversation })
+const handleResize = () => uiStore.handleResize()
 
 onMounted(() => {
   handleResize()
@@ -58,16 +42,16 @@ onUnmounted(() => {
     <div
       class="app"
       :class="{
-        'inspector-hidden': !store.inspectorVisible,
-        'sidebar-open': store.sidebarOpen,
-        'inspector-panel-open': store.inspectorOpen,
-        'focus-mode': store.focusMode,
+        'inspector-hidden': !uiStore.inspectorVisible,
+        'sidebar-open': uiStore.sidebarOpen,
+        'inspector-panel-open': uiStore.inspectorOpen,
+        'focus-mode': uiStore.focusMode,
       }"
     >
       <div
         class="mobile-backdrop"
-        :class="{ visible: store.sidebarOpen || store.inspectorOpen }"
-        @click="store.closeDrawers()"
+        :class="{ visible: uiStore.sidebarOpen || uiStore.inspectorOpen }"
+        @click="uiStore.closeDrawers()"
       />
 
       <ChatSidebar />
@@ -79,31 +63,31 @@ onUnmounted(() => {
       <ChatInspector />
 
       <nav class="mobile-nav">
-        <button class="active" @click="store.sidebarOpen = true">
+        <button class="active" @click="uiStore.sidebarOpen = true">
           <Icon icon="tabler:messages" />
           对话
         </button>
-        <button @click="store.modal = 'command'">
+        <button @click="uiStore.modal = 'command'">
           <Icon icon="tabler:search" />
           搜索
         </button>
-        <button @click="store.modal = 'command'">
+        <button @click="uiStore.modal = 'command'">
           <Icon icon="tabler:folder-open" />
           文件
         </button>
-        <button @click="store.inspectorOpen = true">
+        <button @click="uiStore.inspectorOpen = true">
           <Icon icon="tabler:adjustments-horizontal" />
           会话
         </button>
       </nav>
 
-      <div v-if="store.modal && store.modal !== 'provider' && store.modal !== 'settings' && store.modal !== 'assistant'" class="overlay" @click="store.modal = ''" />
-      <CommandPalette v-if="store.modal === 'command'" />
-      <ModelSelector v-if="store.modal === 'model'" />
-      <PromptEditor v-if="store.modal === 'prompt'" />
-      <SettingsPanel v-if="store.modal === 'settings'" />
-      <ProviderSettings v-if="store.modal === 'provider'" />
-      <AssistantSettings v-if="store.modal === 'assistant'" />
+      <div v-if="uiStore.modal && uiStore.modal !== 'provider' && uiStore.modal !== 'settings' && uiStore.modal !== 'assistant'" class="overlay" @click="uiStore.modal = ''" />
+      <CommandPalette v-if="uiStore.modal === 'command'" />
+      <ModelSelector v-if="uiStore.modal === 'model'" />
+      <PromptEditor v-if="uiStore.modal === 'prompt'" />
+      <SettingsPanel v-if="uiStore.modal === 'settings'" />
+      <ProviderSettings v-if="uiStore.modal === 'provider'" />
+      <AssistantSettings v-if="uiStore.modal === 'assistant'" />
       <ToastNotification />
     </div>
   </ConfigProvider>

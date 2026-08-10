@@ -175,7 +175,7 @@ function close() {
           <el-switch
             v-if="item.type === 'toggle'"
             :model-value="Boolean(settings[item.key])"
-            @change="(val: boolean) => updateSetting(item.key, val)"
+            @change="(val: string | number | boolean) => updateSetting(item.key, val)"
           />
 
           <el-select
@@ -201,7 +201,7 @@ function close() {
             size="small"
             controls-position="right"
             style="width: 120px;"
-            @change="(val: number) => updateSetting(item.key, val)"
+            @change="(val: number | undefined) => updateSetting(item.key, val ?? 0)"
           />
 
           <el-input

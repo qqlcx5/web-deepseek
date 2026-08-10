@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useChatStore } from '@/stores/chat'
+import { useUiStore } from '@/stores/ui'
 import { Icon } from '@iconify/vue'
 
 const store = useChatStore()
+const uiStore = useUiStore()
 const fileInput = ref<HTMLInputElement | null>(null)
 const menuOpenId = ref<string | null>(null)
 const renamingId = ref<string | null>(null)
@@ -59,7 +61,7 @@ if (typeof document !== 'undefined') {
 </script>
 
 <template>
-  <aside class="sidebar" :class="{ open: store.sidebarOpen }">
+  <aside class="sidebar" :class="{ open: uiStore.sidebarOpen }">
     <div class="brand">
       <div class="brand-mark">
         <Icon icon="tabler:rocket" width="17" />
@@ -68,17 +70,17 @@ if (typeof document !== 'undefined') {
         <div class="brand-name">Orbit AI</div>
         <div class="brand-state">
           <span class="status-dot" />
-          {{ store.online ? '云端已同步' : '离线使用中' }}
+          {{ uiStore.online ? '云端已同步' : '离线使用中' }}
         </div>
       </div>
       <button
         class="icon-btn tooltip desktop-only"
         data-tip="收起侧栏"
-        @click="store.focusMode = true"
+        @click="uiStore.focusMode = true"
       >
         <Icon icon="tabler:layout-sidebar-left-collapse" />
       </button>
-      <button class="icon-btn mobile-only" @click="store.sidebarOpen = false">
+      <button class="icon-btn mobile-only" @click="uiStore.sidebarOpen = false">
         <Icon icon="tabler:x" />
       </button>
     </div>
@@ -88,7 +90,7 @@ if (typeof document !== 'undefined') {
         <Icon icon="tabler:edit" width="15" />
         新建对话
       </button>
-      <button class="search-trigger" @click="store.modal = 'command'">
+      <button class="search-trigger" @click="uiStore.modal = 'command'">
         <Icon icon="tabler:search" />
         搜索或执行命令
         <span class="shortcut">⌘ K</span>
@@ -102,7 +104,7 @@ if (typeof document !== 'undefined') {
           <Icon icon="tabler:download" width="14" />
           导出
         </button>
-        <button class="data-btn tooltip" data-tip="设置" @click="store.modal = 'settings'">
+        <button class="data-btn tooltip" data-tip="设置" @click="uiStore.modal = 'settings'">
           <Icon icon="tabler:settings" width="14" />
           设置
         </button>
@@ -113,7 +115,7 @@ if (typeof document !== 'undefined') {
     <div class="sidebar-scroll scroll">
       <div class="section-label assistant-section-label">
         <span>助手</span>
-        <button class="assistant-add tooltip" data-tip="管理 Assistant" @click="store.modal = 'assistant'">
+        <button class="assistant-add tooltip" data-tip="管理 Assistant" @click="uiStore.modal = 'assistant'">
           <Icon icon="tabler:plus" width="14" />
         </button>
       </div>
@@ -188,7 +190,7 @@ if (typeof document !== 'undefined') {
       </button>
     </div>
 
-    <button class="profile" @click="store.showToast('账户菜单已打开')">
+    <button class="profile" @click="uiStore.showToast('账户菜单已打开')">
       <span class="avatar">林</span>
       <span class="profile-copy">
         <span class="profile-name">林晓舟</span>

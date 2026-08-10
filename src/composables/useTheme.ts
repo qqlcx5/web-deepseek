@@ -1,7 +1,6 @@
 import { ref, watch } from 'vue'
-import type { ThemeMode } from '@/types/chat'
-
-const STORAGE_KEY = 'theme-mode'
+import type { ThemeMode } from '@/types'
+import { loadThemeMode, saveThemeMode } from '@/utils/storage'
 
 function getSystemDark(): boolean {
   return typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches
@@ -9,7 +8,7 @@ function getSystemDark(): boolean {
 
 function getInitialMode(): ThemeMode {
   if (typeof localStorage === 'undefined') return 'light'
-  const stored = localStorage.getItem(STORAGE_KEY) as ThemeMode | null
+  const stored = loadThemeMode() as ThemeMode | null
   if (stored === 'light' || stored === 'dark' || stored === 'auto') return stored
   return 'light'
 }
@@ -33,7 +32,7 @@ if (typeof window !== 'undefined') {
 }
 
 watch(mode, () => {
-  if (typeof localStorage !== 'undefined') localStorage.setItem(STORAGE_KEY, mode.value)
+  if (typeof localStorage !== 'undefined') saveThemeMode(mode.value)
   applyTheme()
 }, { immediate: true })
 

@@ -2,54 +2,32 @@
 // All UI state lives here. Components import useUiStore for layout/modal/toast/model.
 
 import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useTheme } from '@/composables/useTheme'
 import { useAppStore } from './app'
-import type { Model, Command, PromptPreset, ModalType } from '@/types'
-
-const TABLET_BP = 1180
-const MOBILE_BP = 760
+import { onlineRef } from '@/composables/useNetwork'
+import { TABLET_BREAKPOINT, MOBILE_BREAKPOINT } from '@/config/breakpoints'
+import { COMMANDS, PROMPT_PRESETS } from '@/config/commands'
+import { loadPromptDraft, savePromptDraft } from '@/utils/storage'
+import type { Model, Command, ModalType } from '@/types'
 
 export const useUiStore = defineStore('ui', () => {
   const appStore = useAppStore()
 
   // ─── Constants ───
-  const tabletBreakpoint = TABLET_BP
-  const mobileBreakpoint = MOBILE_BP
+  const tabletBreakpoint = TABLET_BREAKPOINT
+  const mobileBreakpoint = MOBILE_BREAKPOINT
 
-  // ─── Static Data ───
-  const promptPresets: PromptPreset[] = [
-    {
-      name: '技术评审',
-      value: '你是一名资深软件架构师。检查正确性、安全性、可维护性和迁移风险。先给结论，再给执行步骤。',
-    },
-    {
-      name: '产品评审',
-      value: '你是一名资深产品经理。围绕用户价值、业务目标、边界条件和验收标准评审需求。',
-    },
-    {
-      name: '简洁回答',
-      value: '使用简洁中文回答。先给结论，最多列出五个关键步骤，不重复用户已经知道的信息。',
-    },
-  ]
-
-  const commands: Command[] = [
-    { title: '新建对话', description: '在当前工作区创建空白对话', icon: 'edit', shortcut: '⌘ N', action: 'new' },
-    { title: '切换模型', description: '选择当前会话使用的 AI 模型', icon: 'sparkles', action: 'model' },
-    { title: '编辑系统提示词', description: '修改当前会话的行为和回答风格', icon: 'bot', action: 'prompt' },
-    { title: '切换专注模式', description: '隐藏侧栏和会话信息面板', icon: 'maximize-2', shortcut: '⌘ ⇧ F', action: 'focus' },
-    { title: '切换主题', description: '在亮色和暗色之间切换', icon: 'sun-moon', action: 'theme' },
-    { title: '打开设置', description: '管理应用偏好设置', icon: 'settings', action: 'settings' },
-    { title: 'Provider 管理', description: '管理 API 服务商和模型', icon: 'server', action: 'provider' },
-    { title: '助手管理', description: '管理 AI 助手配置', icon: 'robot', action: 'assistant' },
-  ]
+  // ─── Static Data (sourced from @/config) ───
+  const promptPresets = PROMPT_PRESETS
+  const commands = COMMANDS
 
   // ─── Layout State ───
   const sidebarOpen = ref(false)
   const inspectorOpen = ref(false)
   const inspectorVisible = ref(true)
   const focusMode = ref(false)
-  const online = ref(typeof navigator !== 'undefined' ? navigator.onLine : true)
+  const online = onlineRef
   const saving = ref(false)
 
   // ─── Modal ───
@@ -63,7 +41,7 @@ export const useUiStore = defineStore('ui', () => {
   const commandQuery = ref('')
   const nearBottom = ref(true)
   const promptDraft = ref(
-    localStorage.getItem('orbit-prompt') ||
+    loadPromptDraft() ||
     '你是一名资深AI助手。先给明确结论，再说明关键约束、风险和可执行步骤。',
   )
 
@@ -183,13 +161,13 @@ export const useUiStore = defineStore('ui', () => {
     if (focusMode.value) {
       inspectorVisible.value = false
       inspectorOpen.value = false
-    } else if (window.innerWidth > TABLET_BP) {
+    } else if (window.innerWidth > tabletBreakpoint) {
       inspectorVisible.value = true
     }
   }
 
   function toggleInspector() {
-    if (window.innerWidth <= TABLET_BP) {
+    if (window.innerWidth <= tabletBreakpoint) {
       inspectorOpen.value = !inspectorOpen.value
     } else {
       inspectorVisible.value = !inspectorVisible.value
@@ -207,13 +185,13 @@ export const useUiStore = defineStore('ui', () => {
   }
 
   function handleResize() {
-    if (window.innerWidth > TABLET_BP && !focusMode.value) {
+    if (window.innerWidth > tabletBreakpoint && !focusMode.value) {
       inspectorVisible.value = true
       inspectorOpen.value = false
     } else {
       inspectorVisible.value = false
     }
-    if (window.innerWidth > MOBILE_BP) {
+    if (window.innerWidth > mobileBreakpoint) {
       sidebarOpen.value = false
     }
   }
@@ -236,21 +214,14 @@ export const useUiStore = defineStore('ui', () => {
 
   function savePrompt() {
     modal.value = ''
-    localStorage.setItem('orbit-prompt', promptDraft.value)
+    savePromptDraft(promptDraft.value)
     showToast('系统提示词新版本已保存')
   }
 
-  // ─── Network Monitoring ───
-  if (typeof window !== 'undefined') {
-    window.addEventListener('online', () => {
-      online.value = true
-      showToast('网络已恢复')
-    })
-    window.addEventListener('offline', () => {
-      online.value = false
-      showToast('网络已断开，消息将保存在本地')
-    })
-  }
+  // ─── Network Monitoring (state lives in useNetwork; we only surface toasts) ───
+  watch(online, isOnline => {
+    showToast(isOnline ? '网络已恢复' : '网络已断开，消息将保存在本地')
+  })
 
   return {
     // Constants

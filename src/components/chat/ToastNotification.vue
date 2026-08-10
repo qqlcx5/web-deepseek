@@ -1,15 +1,15 @@
 <script setup lang="ts">
-import { useChatStore } from '@/stores/chat'
+import { useUiStore } from '@/stores/ui'
 import { Icon } from '@iconify/vue'
 
-const store = useChatStore()
+const uiStore = useUiStore()
 </script>
 
 <template>
-  <div v-if="store.toast" class="toast">
+  <div v-if="uiStore.toast" class="toast">
     <Icon icon="tabler:circle-check" />
-    <span>{{ store.toast }}</span>
-    <button v-if="store.undoAction" class="toast-action" @click="store.undo()">撤销</button>
+    <span>{{ uiStore.toast }}</span>
+    <button v-if="uiStore.undoAction" class="toast-action" @click="uiStore.undo()">撤销</button>
   </div>
 </template>
 

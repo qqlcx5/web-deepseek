@@ -3,8 +3,7 @@
 // Supports dynamic provider switching (apiHost + apiKey) at request time.
 
 import http, { createHttp, setHttpConfig } from '@/utils/http'
-import type { ChatCompletionResponse } from '@/types/chat'
-import type { Provider } from '@/types'
+import type { ChatCompletionResponse } from '@/types'
 
 // Re-export setHttpConfig for convenience
 export { setHttpConfig }
@@ -62,7 +61,7 @@ export interface ChatRequestParams {
  * The final request URL becomes: {normalisedBase}/chat/completions
  */
 function normalizeApiHost(raw: string): string {
-  let host = raw.trim().replace(/#+$/, '').replace(/\/+$/, '')
+  const host = raw.trim().replace(/#+$/, '').replace(/\/+$/, '')
 
   // Already contains /chat/completions — extract the base before it
   const chatIdx = host.indexOf('/chat/completions')

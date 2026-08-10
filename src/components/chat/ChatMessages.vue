@@ -2,6 +2,7 @@
 import { ref, watch, nextTick, computed } from 'vue'
 import { useChatStore } from '@/stores/chat'
 import { useAppStore } from '@/stores/app'
+import { useUiStore } from '@/stores/ui'
 import { Icon } from '@iconify/vue'
 import { MarkdownRenderer } from 'x-markdown-vue'
 import { Thinking } from 'vue-element-plus-x'
@@ -11,6 +12,7 @@ import type { ChatMessage, MessageBlock } from '@/types'
 
 const store = useChatStore()
 const appStore = useAppStore()
+const uiStore = useUiStore()
 const { isDark } = useTheme()
 const messageScroller = ref<HTMLElement | null>(null)
 const codeViewer = ref<{ language: string; code: string } | null>(null)
@@ -89,24 +91,6 @@ function hasUsage(message: ChatMessage): boolean {
 function getUsage(message: ChatMessage) {
   return message.usage
 }
-
-// Thinking collapse state per message
-const thinkingExpanded = ref<Record<string, boolean>>({})
-
-function isThinkingExpanded(messageId: string, isLoading: boolean): boolean {
-  // During loading, always expand
-  if (isLoading) return true
-  // After loading, check manual override; default collapsed
-  if (thinkingExpanded.value[messageId] !== undefined) {
-    return thinkingExpanded.value[messageId]
-  }
-  return false
-}
-
-function toggleThinking(messageId: string) {
-  thinkingExpanded.value[messageId] = !isThinkingExpanded(messageId, false)
-}
-
 function closeCodeViewer() {
   codeViewer.value = null
 }
@@ -115,9 +99,9 @@ async function copyCodeViewer() {
   if (!codeViewer.value) return
   try {
     await navigator.clipboard.writeText(codeViewer.value.code)
-    store.showToast('代码已复制')
+    uiStore.showToast('代码已复制')
   } catch {
-    store.showToast('浏览器未授予剪贴板权限')
+    uiStore.showToast('浏览器未授予剪贴板权限')
   }
 }
 
@@ -125,14 +109,14 @@ function handleScroll() {
   if (!messageScroller.value) return
   const el = messageScroller.value
   const dist = el.scrollHeight - el.scrollTop - el.clientHeight
-  store.nearBottom = dist < 100
+  uiStore.nearBottom = dist < 100
 }
 
 function scrollToBottom() {
   nextTick(() => {
     if (!messageScroller.value) return
     messageScroller.value.scrollTop = messageScroller.value.scrollHeight
-    store.nearBottom = true
+    uiStore.nearBottom = true
   })
 }
 
@@ -140,7 +124,7 @@ function scrollToBottom() {
 watch(
   () => store.messages.length,
   () => {
-    if (store.nearBottom || store.generating) scrollToBottom()
+    if (uiStore.nearBottom || store.generating) scrollToBottom()
   },
 )
 
@@ -148,7 +132,7 @@ watch(
 watch(
   () => store.messages.map(m => m.content).join(''),
   () => {
-    if (store.nearBottom) scrollToBottom()
+    if (uiStore.nearBottom) scrollToBottom()
   },
 )
 
@@ -156,7 +140,7 @@ watch(
 watch(
   () => store.messages.map(m => m.reasoningContent ?? '').join(''),
   () => {
-    if (store.nearBottom) scrollToBottom()
+    if (uiStore.nearBottom) scrollToBottom()
   },
 )
 
@@ -307,7 +291,7 @@ defineExpose({ scrollToBottom })
                   <span class="artifact-name">{{ message.artifact.name }}</span>
                   <span class="artifact-meta">{{ message.artifact.meta }}</span>
                 </span>
-                <button class="secondary" @click="store.showToast('已在右侧打开产物预览')">
+                <button class="secondary" @click="uiStore.showToast('已在右侧打开产物预览')">
                   <Icon icon="tabler:layout-sidebar-right-expand" width="13" />
                   打开
                 </button>
@@ -369,7 +353,7 @@ defineExpose({ scrollToBottom })
       </div>
     </div>
 
-    <button v-if="!store.nearBottom && store.messages.length > 0" class="jump-bottom" @click="scrollToBottom">
+    <button v-if="!uiStore.nearBottom && store.messages.length > 0" class="jump-bottom" @click="scrollToBottom">
       <Icon icon="tabler:arrow-down" />
       回到底部
     </button>

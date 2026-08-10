@@ -55,7 +55,7 @@ function normalizeAppData(value: unknown): AppData {
     providers: Array.isArray(raw.providers) ? raw.providers : [],
     assistants: normalizedAssistants,
     topics,
-    settings: { ...DEFAULT_SETTINGS, ...(raw.settings ?? {}) },
+    settings: { ...DEFAULT_SETTINGS, ...raw.settings },
   }
 }
 

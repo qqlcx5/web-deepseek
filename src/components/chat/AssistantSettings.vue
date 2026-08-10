@@ -3,7 +3,7 @@ import { ref, computed } from 'vue'
 import { useAppStore } from '@/stores/app'
 import { useUiStore } from '@/stores/ui'
 import { Icon } from '@iconify/vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import type { Assistant } from '@/types'
 
 const appStore = useAppStore()

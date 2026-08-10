@@ -3,10 +3,12 @@ import { ref, nextTick } from 'vue'
 import { useChatStore } from '@/stores/chat'
 import { useTheme } from '@/composables/useTheme'
 import { useAppStore } from '@/stores/app'
+import { useUiStore } from '@/stores/ui'
 import { Icon } from '@iconify/vue'
 
 const store = useChatStore()
 const appStore = useAppStore()
+const uiStore = useUiStore()
 const { isDark, setTheme } = useTheme()
 
 const renaming = ref(false)
@@ -23,7 +25,7 @@ function startRename() {
 function confirmRename() {
   if (renaming.value && renameValue.value.trim() && store.activeChatId) {
     store.renameTopic(store.activeChatId, renameValue.value.trim())
-    store.showToast('对话已重命名')
+    uiStore.showToast('对话已重命名')
   }
   renaming.value = false
 }
@@ -38,14 +40,14 @@ function toggleAppTheme() {
 <template>
   <header class="topbar">
     <button
-      v-if="store.focusMode"
+      v-if="uiStore.focusMode"
       class="icon-btn tooltip desktop-only"
       data-tip="显示侧栏"
-      @click="store.focusMode = false"
+      @click="uiStore.focusMode = false"
     >
       <Icon icon="tabler:layout-sidebar-left-expand" />
     </button>
-    <button class="icon-btn mobile-only" @click="store.sidebarOpen = true">
+    <button class="icon-btn mobile-only" @click="uiStore.sidebarOpen = true">
       <Icon icon="tabler:menu" />
     </button>
 
@@ -71,23 +73,23 @@ function toggleAppTheme() {
           <Icon icon="tabler:pencil" width="13" />
         </button>
       </div>
-      <div class="save-state" :class="{ 'save-error': store.saveError }">
-        <Icon :icon="store.saveError ? 'tabler:cloud-x' : 'tabler:cloud-check'" />
-        {{ store.saveError ? '保存失败' : (store.saving ? '正在保存...' : (store.currentChat ? '刚刚保存' : '就绪')) }}
+      <div class="save-state" :class="{ 'save-error': appStore.saveError }">
+        <Icon :icon="appStore.saveError ? 'tabler:cloud-x' : 'tabler:cloud-check'" />
+        {{ appStore.saveError ? '保存失败' : (store.saving ? '正在保存...' : (store.currentChat ? '刚刚保存' : '就绪')) }}
         <template v-if="store.currentChat">· {{ store.messages.length }} 条消息</template>
       </div>
     </div>
 
-    <button class="model-button" @click="store.modal = 'model'">
+    <button class="model-button" @click="uiStore.modal = 'model'">
       <Icon icon="tabler:sparkles" width="14" />
-      <span>{{ store.selectedModel?.name }}</span>
+      <span>{{ uiStore.selectedModel?.name }}</span>
       <Icon icon="tabler:chevron-down" width="13" />
     </button>
 
     <button
       class="icon-btn tooltip desktop-only"
       data-tip="Provider 和模型配置"
-      @click="store.modal = 'provider'"
+      @click="uiStore.modal = 'provider'"
     >
       <Icon icon="tabler:server" />
     </button>
@@ -95,7 +97,7 @@ function toggleAppTheme() {
     <button
       class="icon-btn tooltip desktop-only"
       data-tip="Assistant 管理"
-      @click="store.modal = 'assistant'"
+      @click="uiStore.modal = 'assistant'"
     >
       <Icon icon="tabler:robot" />
     </button>
@@ -111,8 +113,8 @@ function toggleAppTheme() {
     <button
       class="icon-btn tooltip desktop-only"
       data-tip="专注模式"
-      :class="{ active: store.focusMode }"
-      @click="store.toggleFocusMode()"
+      :class="{ active: uiStore.focusMode }"
+      @click="uiStore.toggleFocusMode()"
     >
       <Icon icon="tabler:maximize" />
     </button>
@@ -120,8 +122,8 @@ function toggleAppTheme() {
     <button
       class="icon-btn tooltip"
       data-tip="会话信息"
-      :class="{ active: store.inspectorVisible || store.inspectorOpen }"
-      @click="store.toggleInspector()"
+      :class="{ active: uiStore.inspectorVisible || uiStore.inspectorOpen }"
+      @click="uiStore.toggleInspector()"
     >
       <Icon icon="tabler:layout-sidebar-right" />
     </button>
@@ -129,13 +131,13 @@ function toggleAppTheme() {
     <button
       class="icon-btn tooltip"
       data-tip="设置"
-      @click="store.modal = 'settings'"
+      @click="uiStore.modal = 'settings'"
     >
       <Icon icon="tabler:settings" />
     </button>
   </header>
 
-  <div v-if="!store.online" class="network-banner">
+  <div v-if="!uiStore.online" class="network-banner">
     <Icon icon="tabler:wifi-off" />
     网络已断开。消息将保存在本地，恢复连接后自动发送。
   </div>

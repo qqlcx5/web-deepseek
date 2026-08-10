@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { useChatStore } from '@/stores/chat'
+import { useUiStore } from '@/stores/ui'
 import { Icon } from '@iconify/vue'
 
-const store = useChatStore()
+const uiStore = useUiStore()
 </script>
 
 <template>
@@ -12,7 +12,7 @@ const store = useChatStore()
         <div class="dialog-title">系统提示词</div>
         <div class="dialog-subtitle">仅影响当前会话。修改后不会重新生成已有回复。</div>
       </div>
-      <button class="icon-btn" @click="store.modal = ''">
+      <button class="icon-btn" @click="uiStore.modal = ''">
         <Icon icon="tabler:x" />
       </button>
     </header>
@@ -20,21 +20,21 @@ const store = useChatStore()
     <div class="dialog-body">
       <div class="prompt-presets">
         <button
-          v-for="preset in store.promptPresets"
+          v-for="preset in uiStore.promptPresets"
           :key="preset.name"
           class="preset"
-          @click="store.promptDraft = preset.value"
+          @click="uiStore.promptDraft = preset.value"
         >
           {{ preset.name }}
         </button>
       </div>
       <label class="field-label" for="system-prompt">当前提示词</label>
-      <textarea id="system-prompt" v-model="store.promptDraft" class="field-area" />
+      <textarea id="system-prompt" v-model="uiStore.promptDraft" class="field-area" />
     </div>
 
     <footer class="dialog-footer">
-      <button class="secondary" @click="store.modal = ''">取消</button>
-      <button class="primary" @click="store.savePrompt()">
+      <button class="secondary" @click="uiStore.modal = ''">取消</button>
+      <button class="primary" @click="uiStore.savePrompt()">
         <Icon icon="tabler:check" width="14" />
         保存版本
       </button>

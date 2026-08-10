@@ -9,9 +9,10 @@ import './styles/chat.css'
 
 import App from './App.vue'
 import router from './router'
+import { loadThemeMode } from '@/utils/storage'
 
 // Initialize theme before mount
-const storedTheme = localStorage.getItem('theme-mode') || 'light'
+const storedTheme = loadThemeMode()
 const isDark = storedTheme === 'dark' || (storedTheme === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches)
 if (isDark) document.documentElement.classList.add('dark')
 

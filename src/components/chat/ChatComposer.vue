@@ -2,12 +2,14 @@
 import { ref, nextTick, computed } from 'vue'
 import { useChatStore } from '@/stores/chat'
 import { useAppStore } from '@/stores/app'
+import { useUiStore } from '@/stores/ui'
 import { Icon } from '@iconify/vue'
 import { Attachments } from 'vue-element-plus-x'
 import { estimateTokens } from '@/utils/token-counter'
 
 const store = useChatStore()
 const appStore = useAppStore()
+const uiStore = useUiStore()
 const composer = ref<HTMLTextAreaElement | null>(null)
 const fileInput = ref<HTMLInputElement | null>(null)
 
@@ -100,7 +102,7 @@ defineExpose({ composer, resizeComposer })
 <template>
   <div class="composer-wrap">
     <!-- Offline banner -->
-    <div v-if="!store.online" class="offline-banner">
+    <div v-if="!uiStore.online" class="offline-banner">
       <Icon icon="tabler:wifi-off" width="14" />
       <span>网络已断开。消息将保存在本地，网络恢复后可重试。</span>
     </div>

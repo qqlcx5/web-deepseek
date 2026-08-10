@@ -2,18 +2,20 @@
 import { computed } from 'vue'
 import { useChatStore } from '@/stores/chat'
 import { useAppStore } from '@/stores/app'
+import { useUiStore } from '@/stores/ui'
 import { Icon } from '@iconify/vue'
 import { estimateTokens, estimateContextPercent } from '@/utils/token-counter'
 import type { ChatMessage } from '@/types'
 
 const store = useChatStore()
 const appStore = useAppStore()
+const uiStore = useUiStore()
 
 // ─── Settings-driven visibility ───
 const showTokens = computed(() => appStore.settings?.showTokens ?? true)
 
 const contextPercent = computed(() => {
-  const ctxLen = store.selectedModel?.contextLength || 64000
+  const ctxLen = uiStore.selectedModel?.contextLength || 64000
   return estimateContextPercent(store.messages, ctxLen)
 })
 
@@ -71,7 +73,7 @@ const outputTokens = computed(() =>
 )
 const isRealUsage = computed(() => hasRealUsage.value)
 const estimatedCost = computed(() => {
-  const pricing = store.selectedModel?.pricing
+  const pricing = uiStore.selectedModel?.pricing
   if (!pricing) return '—'
   const cost = (inputTokens.value / 1_000_000) * pricing.input + (outputTokens.value / 1_000_000) * pricing.output
   return cost < 0.01 ? '<$0.01' : `$${cost.toFixed(2)}`
@@ -81,10 +83,10 @@ const assistantCount = computed(() => store.messages.filter(m => m.role === 'ass
 </script>
 
 <template>
-  <aside v-if="store.inspectorVisible || store.inspectorOpen" class="inspector" :class="{ open: store.inspectorOpen }">
+  <aside v-if="uiStore.inspectorVisible || uiStore.inspectorOpen" class="inspector" :class="{ open: uiStore.inspectorOpen }">
     <div class="inspector-head">
       <span class="inspector-title">会话信息</span>
-      <button class="icon-btn tooltip" data-tip="关闭" @click="store.closeInspector()">
+      <button class="icon-btn tooltip" data-tip="关闭" @click="uiStore.closeInspector()">
         <Icon icon="tabler:x" />
       </button>
     </div>
@@ -94,9 +96,9 @@ const assistantCount = computed(() => store.messages.filter(m => m.role === 'ass
       <section class="panel-section">
         <div class="panel-heading">
           系统提示词
-          <button class="panel-edit" @click="store.modal = 'prompt'">编辑</button>
+          <button class="panel-edit" @click="uiStore.modal = 'prompt'">编辑</button>
         </div>
-        <div class="prompt-preview">{{ store.promptDraft }}</div>
+        <div class="prompt-preview">{{ uiStore.promptDraft }}</div>
       </section>
 
       <!-- Context usage -->
@@ -109,7 +111,7 @@ const assistantCount = computed(() => store.messages.filter(m => m.role === 'ass
         <div class="meter-bar">
           <div class="meter-fill" :style="{ width: contextPercent + '%', backgroundColor: meterColor }" />
         </div>
-        <div class="meter-note">{{ contextPercent }}% 已用 · 上下文窗口 {{ (store.selectedModel?.contextLength || 64000) / 1000 }}K tokens</div>
+        <div class="meter-note">{{ contextPercent }}% 已用 · 上下文窗口 {{ (uiStore.selectedModel?.contextLength || 64000) / 1000 }}K tokens</div>
       </section>
 
       <!-- Context files -->
@@ -141,12 +143,12 @@ const assistantCount = computed(() => store.messages.filter(m => m.role === 'ass
       <section class="panel-section">
         <div class="panel-heading">当前模型</div>
         <div class="model-info">
-          <span class="model-dot" :style="{ backgroundColor: store.selectedModel?.color }" />
+          <span class="model-dot" :style="{ backgroundColor: uiStore.selectedModel?.color }" />
           <div>
-            <div class="model-info-name">{{ store.selectedModel?.name }}</div>
-            <div class="model-info-desc">{{ store.selectedModel?.description }}</div>
-            <div v-if="store.selectedModel?.contextLength" class="model-info-meta">
-              上下文 {{ (store.selectedModel.contextLength / 1000).toFixed(0) }}K tokens
+            <div class="model-info-name">{{ uiStore.selectedModel?.name }}</div>
+            <div class="model-info-desc">{{ uiStore.selectedModel?.description }}</div>
+            <div v-if="uiStore.selectedModel?.contextLength" class="model-info-meta">
+              上下文 {{ (uiStore.selectedModel.contextLength / 1000).toFixed(0) }}K tokens
             </div>
           </div>
         </div>

@@ -2,9 +2,11 @@
 
 import { computed, ref, watch } from 'vue'
 import { defineStore } from 'pinia'
-import type { Attachment, ChatMessage, ChatStreamDelta, MessageBlock, Model } from '@/types'
-import { chatApi, type ChatRequestParams, ApiError } from '@/api/chat-api'
-import { estimateTokens } from '@/utils/token-counter'
+import type { Attachment, ChatMessage, Model } from '@/types'
+import { streamAssistantMessage } from '@/services/chat-service'
+import { searchTopics } from '@/services/search'
+import { buildTopicMarkdown, downloadText, safeFilename } from '@/services/export'
+import { loadDraft, saveDraft } from '@/utils/storage'
 import { useAppStore } from './app'
 import { useUiStore } from './ui'
 
@@ -31,7 +33,7 @@ export const useChatStore = defineStore('chat', () => {
   const activeChatId = ref<string | null>(null)
   const activeAssistantId = ref<string | null>(null)
   const messages = ref<ChatMessage[]>([])
-  const draft = ref(localStorage.getItem('orbit-draft') ?? '')
+  const draft = ref(loadDraft())
   const replyingTo = ref('')
   const replyingToMsgId = ref<string | null>(null)
   const generating = ref(false)
@@ -53,28 +55,15 @@ export const useChatStore = defineStore('chat', () => {
     })))
   const canSend = computed(() => Boolean(draft.value.trim() || attachments.value.length) && !generating.value)
 
-  const sidebarOpen = computed({ get: () => uiStore.sidebarOpen, set: value => { uiStore.sidebarOpen = value } })
-  const focusMode = computed({ get: () => uiStore.focusMode, set: value => { uiStore.focusMode = value } })
-  const inspectorVisible = computed({ get: () => uiStore.inspectorVisible, set: value => { uiStore.inspectorVisible = value } })
-  const inspectorOpen = computed({ get: () => uiStore.inspectorOpen, set: value => { uiStore.inspectorOpen = value } })
-  const modal = computed({ get: () => uiStore.modal, set: value => { uiStore.modal = value } })
-  const nearBottom = computed({ get: () => uiStore.nearBottom, set: value => { uiStore.nearBottom = value } })
-  const commandQuery = computed({ get: () => uiStore.commandQuery, set: value => { uiStore.commandQuery = value } })
-  const promptDraft = computed({ get: () => uiStore.promptDraft, set: value => { uiStore.promptDraft = value } })
-  const selectedModel = computed<Model | null>({ get: () => uiStore.selectedModel, set: value => { uiStore.selectedModel = value } })
   const saving = computed(() => appStore.saving || generating.value)
-  const saveError = computed(() => appStore.saveError)
-  const toast = computed(() => uiStore.toast)
-  const undoAction = computed(() => uiStore.undoAction)
-  const online = computed(() => uiStore.online)
 
   const filteredCommandChats = computed(() => {
-    const query = commandQuery.value.trim().toLowerCase()
+    const query = uiStore.commandQuery.trim().toLowerCase()
     if (!query) return chats.value.slice(0, 5)
     return chats.value.filter(chat => `${chat.title} ${chat.preview}`.toLowerCase().includes(query)).slice(0, 5)
   })
 
-  const searchResults = computed<SearchResult[]>(() => searchMessages(commandQuery.value).slice(0, 20))
+  const searchResults = computed<SearchResult[]>(() => searchMessages(uiStore.commandQuery).slice(0, 20))
 
   function assistantTopicCount(assistantId: string): number {
     return appStore.topics.filter(topic => topic.assistantId === assistantId).length
@@ -145,7 +134,7 @@ export const useChatStore = defineStore('chat', () => {
 
   function getActiveModel(): Model {
     // User-selected model takes priority
-    if (selectedModel.value) return selectedModel.value
+    if (uiStore.selectedModel) return uiStore.selectedModel
 
     // Fall back to assistant's configured model
     const assistantId = currentChat.value?.assistantId ?? activeAssistantId.value ?? appStore.defaultAssistant?.id
@@ -157,108 +146,25 @@ export const useChatStore = defineStore('chat', () => {
     return fallback
   }
 
-  function findOrCreateBlock(message: ChatMessage, type: MessageBlock['type']): MessageBlock {
-    const current = message.blocks.find(block => block.type === type)
-    if (current) return current
-    const block: MessageBlock = {
-      id: createId('block'),
-      type,
-      content: '',
-      status: 'streaming',
-      createdAt: timestamp(),
-    }
-    message.blocks.push(block)
-    return block
-  }
-
   async function streamChat(assistantMessage: ChatMessage, context = messages.value) {
     generating.value = true
-    assistantMessage.status = 'streaming'
-    assistantMessage.loading = true
     abortController.value = new AbortController()
 
     try {
       const model = getActiveModel()
-      assistantMessage.model = model.name
       const provider = appStore.providers.find(candidate => candidate.id === model.providerId)
-      const params: ChatRequestParams = {
-        messages: context
-          .filter(message => message.content && (message.status === 'complete' || message.status === 'stopped'))
-          .map(message => ({ role: message.role, content: message.content })),
-        model: model.id,
+      await streamAssistantMessage({
+        assistantMessage,
+        context,
+        model,
+        provider,
         signal: abortController.value.signal,
-        ...(provider?.apiHost ? { provider: { apiHost: provider.apiHost, apiKey: provider.apiKey } } : {}),
-      }
-
-      const reader = (await chatApi.chatStream(params)).getReader()
-      const decoder = new TextDecoder()
-      let buffer = ''
-      let lastPersistAt = 0
-
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-        buffer += decoder.decode(value, { stream: true })
-        const lines = buffer.split('\n')
-        buffer = lines.pop() ?? ''
-
-        for (const line of lines) {
-          const payload = line.trim()
-          if (!payload.startsWith('data: ')) continue
-          const json = payload.slice(6)
-          if (json === '[DONE]') continue
-          try {
-            const delta = JSON.parse(json) as ChatStreamDelta
-            if (delta.reasoning_content) {
-              assistantMessage.reasoningContent = (assistantMessage.reasoningContent ?? '') + delta.reasoning_content
-              findOrCreateBlock(assistantMessage, 'thinking').content += delta.reasoning_content
-            }
-            if (delta.content) {
-              assistantMessage.content += delta.content
-              findOrCreateBlock(assistantMessage, 'main_text').content += delta.content
-            }
-            if (delta.usage) assistantMessage.usage = delta.usage
-          } catch {
-            // Ignore malformed event frames and continue consuming the stream.
-          }
-        }
-
-        if (Date.now() - lastPersistAt > 400 && activeChatId.value) {
-          appStore.updateMessage(activeChatId.value, assistantMessage)
-          lastPersistAt = Date.now()
-        }
-      }
-
-      for (const block of assistantMessage.blocks) {
-        if (block.status === 'streaming') block.status = 'success'
-      }
-      assistantMessage.status = 'complete'
-    } catch (error) {
-      if ((error as Error).name === 'AbortError') {
-        assistantMessage.status = 'stopped'
-        for (const block of assistantMessage.blocks) {
-          if (block.status === 'streaming') block.status = 'success'
-        }
-      } else {
-        const message = error instanceof Error ? error.message : String(error)
-        assistantMessage.status = 'error'
-        assistantMessage.error = message
-        assistantMessage.blocks.push({
-          id: createId('block-error'),
-          type: 'error',
-          content: message,
-          status: 'error',
-          createdAt: timestamp(),
-        })
-        // Show error toast to the user
-        if (error instanceof ApiError || (error as Error).name === 'ApiError') {
-          uiStore.showToast(`请求失败: ${message}`)
-        } else {
-          uiStore.showToast(`请求出错: ${message}`)
-        }
-      }
-    } finally {
-      assistantMessage.loading = false
+        topicId: activeChatId.value ?? undefined,
+        onPersist: (topicId, message) => appStore.updateMessage(topicId, message),
+        onErrorToast: message => uiStore.showToast(message),
+      })
+    }
+    finally {
       generating.value = false
       abortController.value = null
       if (activeChatId.value) appStore.updateMessage(activeChatId.value, assistantMessage)
@@ -361,24 +267,7 @@ export const useChatStore = defineStore('chat', () => {
   }
 
   function searchMessages(query: string): SearchResult[] {
-    const normalized = query.trim().toLowerCase()
-    if (!normalized) return []
-    const results: SearchResult[] = []
-    for (const topic of appStore.topics) {
-      for (const message of topic.messages) {
-        if (message.content.toLowerCase().includes(normalized)) {
-          results.push({
-            topicId: topic.id,
-            topicName: topic.name,
-            messageId: message.id,
-            content: message.content,
-            time: message.createdAt,
-          })
-          if (results.length >= 50) return results
-        }
-      }
-    }
-    return results
+    return searchTopics(appStore.topics, query)
   }
 
   function exportTopicMarkdown(id: string): string {
@@ -387,20 +276,8 @@ export const useChatStore = defineStore('chat', () => {
       uiStore.showToast('未找到对话')
       return ''
     }
-    const lines = [`# ${topic.name}`, '', `> 导出时间：${new Date().toLocaleString('zh-CN')}`, '']
-    for (const message of topic.messages) {
-      const role = message.role === 'user' ? '用户' : message.role === 'assistant' ? '助手' : '系统'
-      lines.push(`## ${role} · ${new Date(message.createdAt).toLocaleString('zh-CN')}`, '', message.content || '_(空消息)_')
-      if (message.reasoningContent) lines.push('', '<details><summary>推理过程</summary>', '', message.reasoningContent, '', '</details>')
-      lines.push('', '---', '')
-    }
-    const markdown = lines.join('\n')
-    const url = URL.createObjectURL(new Blob([markdown], { type: 'text/markdown;charset=utf-8' }))
-    const link = document.createElement('a')
-    link.href = url
-    link.download = `${topic.name.replace(/[<>:"/\\|?*]/g, '_')}.md`
-    link.click()
-    URL.revokeObjectURL(url)
+    const markdown = buildTopicMarkdown(topic)
+    downloadText(`${safeFilename(topic.name)}.md`, markdown)
     uiStore.showToast('对话已导出为 Markdown')
     return markdown
   }
@@ -428,12 +305,6 @@ export const useChatStore = defineStore('chat', () => {
     uiStore.showToast('附件已移除', () => attachments.value.splice(index, 0, removed))
   }
 
-  function toggleFocusMode() { uiStore.toggleFocusMode() }
-  function toggleInspector() { uiStore.toggleInspector() }
-  function closeInspector() { uiStore.closeInspector() }
-  function closeDrawers() { uiStore.closeDrawers() }
-  function showToast(message: string, undo?: () => void) { uiStore.showToast(message, undo) }
-  function selectModel(model: Model | null) { if (model) uiStore.selectModel(model) }
   function runCommand(command: typeof uiStore.commands[number]) {
     if (command.action === 'new') {
       newConversation()
@@ -442,10 +313,6 @@ export const useChatStore = defineStore('chat', () => {
     }
     uiStore.runCommand(command)
   }
-  function savePrompt() { uiStore.savePrompt() }
-  function handleResize() { uiStore.handleResize() }
-  function undo() { uiStore.undo() }
-
   async function importData(file: File) {
     const result = await appStore.importData(file)
     if (!result.ok) {
@@ -464,20 +331,17 @@ export const useChatStore = defineStore('chat', () => {
     uiStore.showToast(result.ok ? '数据已导出' : `导出已阻止：\n${result.errors.join('\n')}`)
   }
 
-  watch(draft, value => localStorage.setItem('orbit-draft', value))
+  watch(draft, saveDraft)
 
   return {
     activeChatId, activeAssistantId, messages, draft, replyingTo, replyingToMsgId, generating, attachments,
-    sidebarOpen, focusMode, inspectorVisible, inspectorOpen, modal, toast, undoAction, online, saving, saveError, nearBottom,
-    commandQuery, promptDraft, selectedModel,
-    models: uiStore.models, promptPresets: uiStore.promptPresets,
-    commands: uiStore.commands, filteredCommands: uiStore.filteredCommands, filteredCommandChats, searchResults,
-    tabletBreakpoint: uiStore.tabletBreakpoint, mobileBreakpoint: uiStore.mobileBreakpoint,
+    saving,
+    filteredCommandChats, searchResults,
     currentChat, assistantTabs, chats, canSend,
     assistantTopicCount, selectAssistant, openConversation, newConversation, deleteConversation, clearConversation, renameTopic, togglePin, initApp,
     sendMessage, stopGeneration, streamChat, copyMessage, rateMessage, regenerate, branchFrom, editMessage,
     searchMessages, exportTopicMarkdown, addFiles, removeAttachment,
-    toggleFocusMode, toggleInspector, closeInspector, closeDrawers, showToast, selectModel, runCommand, savePrompt, handleResize, undo,
-    importData, exportData, estimateTokens,
+    runCommand,
+    importData, exportData,
   }
 })

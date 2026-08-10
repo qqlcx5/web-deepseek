@@ -3,7 +3,7 @@ import { ref, computed, watch } from 'vue'
 import { useAppStore } from '@/stores/app'
 import { useUiStore } from '@/stores/ui'
 import { Icon } from '@iconify/vue'
-import type { Provider, ModelInfo } from '@/types'
+import type { Provider } from '@/types'
 
 const appStore = useAppStore()
 const uiStore = useUiStore()
@@ -192,7 +192,8 @@ watch(searchQuery, () => {
   </el-drawer>
 
   <el-dialog
-    v-model="deleteConfirmId"
+    :model-value="Boolean(deleteConfirmId)"
+    @update:model-value="(val: boolean) => { if (!val) deleteConfirmId = null }"
     title="确认删除"
     width="360px"
     align-center
@@ -262,7 +263,7 @@ watch(searchQuery, () => {
         >
           <el-tag
             :type="provider.enabled ? 'success' : 'info'"
-            effect="dot"
+            effect="light"
             size="small"
             round
           />
