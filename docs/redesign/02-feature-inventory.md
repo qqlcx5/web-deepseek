@@ -1,6 +1,7 @@
 # 02 功能清单（按领域 + 优先级）
 
 > P0 = MVP 必须；P1 = 重要；P2 = 增强。UI 设计需为 P0/P1 提供完整状态，P2 至少留入口。
+> 数据兼容 Cherry Studio：模型参数归 Assistant（非 model），systemPrompt 归 Assistant.prompt，不引入 documents 实体。
 
 ## F1 对话（Chat）
 
@@ -15,64 +16,65 @@
 | F1.7 | 重新生成 / 分支 | P1 | 不重复占位消息；分支切换 |
 | F1.8 | 错误块 + 可重试 | P0 | 网络/认证/服务端错误红色块 |
 | F1.9 | 引用 / 工具块渲染 | P1 | block 顺序按数据 |
-| F1.10 | 附件上传/预览/移除（图片+文档） | P1 | 输入区预览 + 消息内文件卡 |
+| F1.10 | 消息复制 / 点赞踩 / 编辑重发 | P1 | hover 工具栏 |
 | F1.11 | Token 用量展示 | P1 | prompt/completion/total |
 | F1.12 | 话题自动命名 | P2 | 首条用户消息生成，≤30 字 |
-| F1.13 | 消息复制 / 点赞踩 / 编辑重发 | P1 | hover 工具栏 |
-| F1.14 | 草稿持久 | P2 | 未发送内容刷新不丢 |
+| F1.13 | 草稿持久 | P2 | 未发送内容刷新不丢 |
 
 ## F2 多 Provider 与模型（Multi-Provider）
 
+> 参数归属遵循 Cherry：模型参数（temp/maxTokens/contextCount/stream）与 systemPrompt 在 **Assistant** 上；Model 只放身份信息。
+
 | ID | 功能 | 优先级 | 说明 |
 |---|---|---|---|
-| F2.1 | Provider CRUD（名称/Host/Key/启用） | P0 | ID 唯一；Host/名称必填 |
-| F2.2 | 模型 CRUD + 启用 | P0 | 禁用模型不进选择器 |
-| F2.3 | 三类 Provider 适配（OpenAI 兼容/Anthropic/Ollama） | P0 | 统一适配器接口 |
-| F2.4 | 每模型独立 systemPrompt | P1 | 优先级 model > assistant > 全局 > 不发 |
-| F2.5 | 每模型 contextWindow / temperature | P1 | temperature 0–2 |
-| F2.6 | 连接测试（成功/失败/延时） | P1 | 状态灯：灰/testing/绿/红 |
+| F2.1 | Provider CRUD（名称/Host/Key/启用/类型） | P0 | providerType ∈ openai-compatible/anthropic/ollama；ID 唯一；Host/名称必填 |
+| F2.2 | 模型 CRUD + 启用 | P0 | Model 仅含身份字段（id/name/group/contextLength/supportedTextDelta/enabled）；禁用不进选择器 |
+| F2.3 | 三类 Provider 适配 | P0 | 统一适配器接口（OpenAI 兼容/Anthropic/Ollama） |
+| F2.4 | Assistant 级 systemPrompt | P0 | `Assistant.prompt`（Cherry 原生）；优先级 assistant > 全局 > 不发 |
+| F2.5 | Assistant 级模型参数 | P1 | temperature/topP/maxTokens/contextCount（Cherry 原生归属） |
+| F2.6 | 连接测试（成功/失败/延时） | P1 | 状态灯：灰/testing/绿/红；**纯 UI 态，不进 Cherry 导出** |
 | F2.7 | 删除引用保护 | P1 | 被 Assistant 使用的模型不可静默删 |
 
-## F3 阅读与抓取（Reader）
+## F3 对话历史搜索（History Search）
+
+> 取代"记忆库"。对 Cherry 原生的 topics/messages 建本地索引，不新增实体。
 
 | ID | 功能 | 优先级 | 说明 |
 |---|---|---|---|
-| F3.1 | 粘贴 URL 抓取 | P0 | SPA 模式：fetch → defuddle；CORS 失败可读提示 |
-| F3.2 | 正文提取 + fallback | P0 | defuddle 失败用 title + body.innerText |
-| F3.3 | Document 入库 + hash 去重 | P0 | 同 URL 重复抓取更新不重建 |
-| F3.4 | Markdown 预览 | P0 | XMarkdown 渲染，不执行脚本 |
-| F3.5 | Raw 预览（纯文本/HTML） | P1 | 深色等宽 |
-| F3.6 | Metadata 预览 | P1 | title/url/site/author/时间/token/hash 等 |
-| F3.7 | 手动重新抓取 | P1 | 强制刷新，无视缓存 |
-| F3.8 | 保存 rawHtml / 压缩（lz-string） | P2 | 设置开关 |
-| F3.9 | 抓取状态机 | P0 | idle/extracting/ready/cached/failed |
+| F3.1 | 全文搜索（MiniSearch） | P0 | 索引 topic 名 + 消息正文；中文基础支持 |
+| F3.2 | 结果分组/高亮 | P1 | 按 Topic 分组，命中关键词高亮 |
+| F3.3 | 跳转原话题 | P0 | 点击结果定位到对应 Topic 与消息 |
+| F3.4 | 跨 Assistant 搜索 | P1 | 可选范围：当前助手 / 全部 |
+| F3.5 | 索引随数据更新 | P0 | 增删改消息后索引同步 |
+| F3.6 | 重建索引 | P2 | 导入/清空后 |
 
-## F4 记忆库（Library）
+## F4 附件与内容注入（Attachments）
+
+> "喂内容给 AI"的唯一通道，不建文档库。
 
 | ID | 功能 | 优先级 | 说明 |
 |---|---|---|---|
-| F4.1 | 全文搜索（MiniSearch） | P0 | 标题/URL/站点/正文/摘要；中文基础支持 |
-| F4.2 | 文档列表（最近/相关） | P0 | 空 query 展示最近捕获 |
-| F4.3 | 文档项（标题/域名/摘要/时间/token/同步状态） | P0 | — |
-| F4.4 | 打开文档 → 跳阅读视图 | P0 | 更新 lastOpenedAt |
-| F4.5 | 回到原网页（新 Tab） | P1 | — |
-| F4.6 | 删除文档（二次确认） | P0 | 删除当前文档后切空态 |
-| F4.7 | 重建搜索索引 | P2 | 导入/清空后 |
-| F4.8 | 基于文档对话（注入上下文） | P1 | Document 作为事实材料注入 |
+| F4.1 | 文件上传（图片/文档） | P1 | 输入区预览 + 消息内文件卡 |
+| F4.2 | 粘贴长文本转附件 | P1 | settings.pasteLongTextAsFile + 阈值 |
+| F4.3 | URL 插入正文（可选） | P2 | 输入框"插入网页"→抓取→作为**本条消息附件**，不入库；CORS 失败可读提示 |
+| F4.4 | 附件预览/移除 | P1 | Attachments + FilesCard |
+| F4.5 | 失败提示 | P1 | 类型不支持/超限 |
 
 ## F5 同步与存储（Sync）
+
+> 备份内容 = Cherry 导出 JSON（二合一）。WebDAV 用 Cherry 原生字段，S3 为扩展通道。
 
 | ID | 功能 | 优先级 | 说明 |
 |---|---|---|---|
 | F5.1 | S3 配置 + 测试 | P0 | aws4fetch；path-style/virtual-hosted |
-| F5.2 | WebDAV 配置 + 测试 | P0 | webdav 库 |
-| F5.3 | 全量上传 / 全量下载 | P0 | 快照模式 |
+| F5.2 | WebDAV 配置 + 测试 | P0 | webdav 库；用 Cherry 原生 webdavHost/User/Pass/Path/AutoSync |
+| F5.3 | 全量上传 / 全量下载 | P0 | 快照模式；备份即 Cherry JSON |
 | F5.4 | 版本备份 + 回滚 | P1 | data.backup-*.json，保留数可配 |
 | F5.5 | 大删除安全闸 | P0 | 疑似空库时阻止并提示 |
 | F5.6 | 自动同步开关 | P2 | 顶栏状态：saving/synced/error |
-| F5.7 | 存储统计（文档/话题/模型数 + 占用） | P1 | — |
+| F5.7 | 存储统计（话题/消息/模型数 + 占用） | P1 | — |
 | F5.8 | 清空本地数据（二次确认） | P0 | 不可撤销提示 |
-| F5.9 | Cherry 导入 / 导出 | P0 | 默认导出无 Key |
+| F5.9 | Cherry 导入 / 导出 | P0 | 默认导出无 Key；与备份同格式 |
 | F5.10 | 密钥掩码 + 导出剔除 | P0 | 安全 |
 
 ## F6 设置（Settings）
@@ -80,17 +82,16 @@
 | ID | 功能 | 优先级 | 说明 |
 |---|---|---|---|
 | F6.1 | 外观（主题/字号/消息样式/字体/分隔线/数学引擎/代码三件套） | P1 | 即时生效 |
-| F6.2 | 输入（发送快捷键/Token 预估/Markdown 渲染输入/删除确认/自动滚动） | P1 | 即时生效 |
+| F6.2 | 输入（发送快捷键/Token 预估/Markdown 渲染输入/删除确认/自动滚动/粘贴阈值） | P1 | 即时生效 |
 | F6.3 | 上下文设置（maxTokens/注入开关/历史条数） | P1 | 驱动 Prompt 组装 |
-| F6.4 | 抓取设置 | P2 | SPA 下标注部分项不生效 |
-| F6.5 | 同步配置（S3/WebDAV/自动同步） | P0 | 承接 F5 |
-| F6.6 | 数据管理（导入/导出/清空/重建索引） | P0 | 承接 F5 |
+| F6.4 | 同步配置（S3/WebDAV/自动同步） | P0 | 承接 F5 |
+| F6.5 | 数据管理（导入/导出/清空/重建索引） | P0 | 承接 F5 |
 
 ## F7 通用（App Shell）
 
 | ID | 功能 | 优先级 | 说明 |
 |---|---|---|---|
-| F7.1 | 一级导航（对话/阅读/记忆库/设置） | P0 | 跨视图不丢状态 |
+| F7.1 | 一级导航（对话/搜索/设置） | P0 | 跨视图不丢状态 |
 | F7.2 | 命令面板（搜索/跳转） | P1 | Cmd/Ctrl+K |
 | F7.3 | 响应式三态 | P0 | 桌面/平板/移动 |
 | F7.4 | 明暗主题 + auto | P0 | 跟随系统 |
