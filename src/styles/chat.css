@@ -162,6 +162,12 @@ button:disabled {
 .slide-up-enter-active, .slide-up-leave-active { transition: all 200ms ease; }
 .slide-up-enter-from, .slide-up-leave-to { transform: translateY(20px); opacity: 0; }
 
+/* ─── Global icon defaults (@iconify/vue defaults to 1em) ─── */
+svg.iconify {
+  width: 16px;
+  height: 16px;
+}
+
 /* ─── Element-Plus-X Theme Overrides ─── */
 .epx-bubble { font-size: 13px; line-height: 1.75; }
 .epx-bubble__content { color: var(--text-secondary); }

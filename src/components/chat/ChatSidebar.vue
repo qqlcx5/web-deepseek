@@ -229,6 +229,7 @@ if (typeof document !== 'undefined') {
   background: var(--brand);
   border-radius: 7px;
 }
+.brand-mark :deep(svg) { width: 17px; height: 17px; }
 .brand-copy { min-width: 0; flex: 1; }
 .brand-name { font-size: 14px; font-weight: 750; color: var(--text); }
 .brand-state { display: flex; align-items: center; gap: 5px; margin-top: 2px; color: var(--success); font-size: 10px; }
@@ -241,13 +242,16 @@ if (typeof document !== 'undefined') {
   font-size: 11px; cursor: pointer; transition: border-color 140ms, color 140ms;
 }
 .data-btn:hover { color: var(--text); border-color: var(--brand); }
+.data-btn :deep(svg) { width: 14px; height: 14px; }
 .new-chat { width: 100%; }
+.new-chat :deep(svg) { width: 15px; height: 15px; }
 .search-trigger {
   display: flex; width: 100%; height: 36px; align-items: center; gap: 8px;
   margin-top: 8px; padding: 0 10px; color: var(--muted);
   background: var(--surface); border: 1px solid var(--line); border-radius: 6px;
   font-size: 12px; text-align: left;
 }
+.search-trigger :deep(svg) { width: 15px; height: 15px; }
 .shortcut {
   margin-left: auto; padding: 2px 5px; color: var(--faint);
   background: var(--surface-3); border: 1px solid var(--line);
@@ -261,6 +265,7 @@ if (typeof document !== 'undefined') {
 .assistant-section-label { justify-content: space-between; }
 .assistant-add { display: inline-flex; width: 24px; height: 24px; align-items: center; justify-content: center; color: var(--muted); background: transparent; border: 0; border-radius: 4px; cursor: pointer; }
 .assistant-add:hover { color: var(--brand); background: var(--brand-soft); }
+.assistant-add :deep(svg) { width: 14px; height: 14px; }
 .assistant-tabs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px; padding: 0 3px; }
 .assistant-tab { display: flex; min-width: 0; height: 34px; align-items: center; gap: 5px; padding: 0 6px; color: var(--text-secondary); background: var(--surface); border: 1px solid var(--line); border-radius: 5px; font-size: 10px; text-align: left; cursor: pointer; }
 .assistant-tab:hover { color: var(--text); border-color: var(--brand); }
@@ -282,9 +287,11 @@ if (typeof document !== 'undefined') {
 .chat-more { display: flex; width: 24px; height: 24px; flex: 0 0 24px; align-items: center; justify-content: center; color: var(--faint); background: transparent; border: 0; border-radius: 4px; cursor: pointer; opacity: 0; transition: opacity 140ms; }
 .chat-row:hover .chat-more { opacity: 1; }
 .chat-more:hover { color: var(--text); background: var(--surface-3); }
+.chat-more :deep(svg) { width: 14px; height: 14px; }
 .chat-menu { position: absolute; right: 4px; top: 36px; z-index: 50; min-width: 120px; padding: 4px; background: var(--surface); border: 1px solid var(--line-strong); border-radius: 6px; box-shadow: var(--shadow-md); display: flex; flex-direction: column; gap: 1px; }
 .menu-item { display: flex; width: 100%; align-items: center; gap: 7px; padding: 6px 8px; color: var(--text-secondary); background: transparent; border: 0; border-radius: 4px; font-size: 11px; text-align: left; cursor: pointer; }
 .menu-item:hover { color: var(--text); background: var(--surface-3); }
+.menu-item :deep(svg) { width: 13px; height: 13px; }
 .menu-item.danger { color: var(--danger); }
 .menu-item.danger:hover { background: color-mix(in srgb, var(--danger) 10%, transparent); }
 .rename-input-wrap { width: 100%; }
@@ -297,6 +304,8 @@ if (typeof document !== 'undefined') {
 .profile-copy { min-width: 0; flex: 1; }
 .profile-name { font-size: 12px; font-weight: 650; }
 .profile-plan { margin-top: 2px; color: var(--faint); font-size: 10px; }
+
+.profile :deep(svg) { width: 15px; height: 15px; }
 
 .icon-btn {
   display: inline-flex; width: 34px; height: 34px; flex: 0 0 34px;

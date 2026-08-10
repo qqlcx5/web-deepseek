@@ -170,6 +170,7 @@ function toggleAppTheme() {
   border: 1px solid var(--line-strong); border-radius: 6px;
   font-size: 12px; font-weight: 600; cursor: pointer;
 }
+.model-button :deep(svg) { width: 14px; height: 14px; }
 .model-button span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .network-banner {
   display: flex; min-height: 34px; align-items: center; justify-content: center;

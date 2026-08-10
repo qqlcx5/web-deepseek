@@ -8,6 +8,7 @@ export {}
 /* prettier-ignore */
 declare module 'vue' {
   export interface GlobalComponents {
+    AppRail: typeof import('./components/chat/AppRail.vue')['default']
     AssistantSettings: typeof import('./components/chat/AssistantSettings.vue')['default']
     ChatComposer: typeof import('./components/chat/ChatComposer.vue')['default']
     ChatInspector: typeof import('./components/chat/ChatInspector.vue')['default']
@@ -37,7 +38,9 @@ declare module 'vue' {
     ProviderSettings: typeof import('./components/chat/ProviderSettings.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
+    SearchView: typeof import('./components/chat/SearchView.vue')['default']
     SettingsPanel: typeof import('./components/chat/SettingsPanel.vue')['default']
+    SettingsView: typeof import('./components/chat/SettingsView.vue')['default']
     ThinkingChain: typeof import('./components/chat/ThinkingChain.vue')['default']
     ToastNotification: typeof import('./components/chat/ToastNotification.vue')['default']
     WelcomeScreen: typeof import('./components/chat/WelcomeScreen.vue')['default']

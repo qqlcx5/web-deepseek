@@ -178,6 +178,7 @@ defineExpose({ composer, resizeComposer })
   border: 1px solid color-mix(in srgb, var(--warning, #f59e0b) 25%, transparent);
   border-radius: 6px; font-size: 11px;
 }
+.offline-banner :deep(svg) { width: 14px; height: 14px; }
 .composer {
   width: min(100%, 820px); margin: 0 auto; background: var(--surface);
   border: 1px solid var(--line-strong); border-radius: 8px;
@@ -213,7 +214,7 @@ defineExpose({ composer, resizeComposer })
 .send-btn { display: flex; width: 32px; height: 32px; align-items: center; justify-content: center; margin-left: 6px; color: white; background: var(--brand); border-radius: 6px; border: 0; cursor: pointer; }
 .send-btn:disabled { color: var(--faint); background: var(--surface-3); cursor: not-allowed; }
 .send-btn.stop { background: var(--danger); }
-.send-btn :deep(svg) { width: 16px; }
+.send-btn :deep(svg) { width: 16px; height: 16px; }
 
 .icon-btn { display: inline-flex; width: 34px; height: 34px; flex: 0 0 34px; align-items: center; justify-content: center; border-radius: 6px; color: var(--muted); background: transparent; border: 0; cursor: pointer; transition: background 140ms, color 140ms; }
 .icon-btn:hover { color: var(--text); background: var(--surface-3); }
