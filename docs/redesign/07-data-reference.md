@@ -1,7 +1,8 @@
 # 07 数据参考（UI 设计对齐用）
 
 > 让设计贴合真实数据形状。完整定义在 `src/types/index.ts`。
-> 持久化根 = `AppData`（单记录存 IndexedDB）。Cherry v5 是导入导出交换格式，与运行时分离。
+> 持久化根 = `AppData`（单记录存 IndexedDB）。
+> **Cherry 兼容原则**：不引入 Cherry 没有的持久化实体；模型参数归 Assistant（Cherry 模式），systemPrompt 归 Assistant.prompt。
 
 ## 7.1 AppData（持久化根）
 
@@ -11,9 +12,9 @@ interface AppData {
   providers: Provider[]
   assistants: Assistant[]
   topics: Topic[]
-  documents: DocumentEntity[]   // 新增·阅读功能·不进 Cherry 导出
   settings: Settings
 }
+// 无 documents 实体（已砍）。附件是消息级字段，非独立实体。
 ```
 
 ## 7.2 Provider / ModelInfo（F2）
@@ -24,12 +25,13 @@ interface Provider {
   name: string
   apiHost: string
   apiKey?: string
-  providerType?: 'openai-compatible' | 'anthropic' | 'ollama'  // 新增·默认 openai-compatible
+  providerType?: 'openai-compatible' | 'anthropic' | 'ollama'  // 默认 openai-compatible
   models: ModelInfo[]
   enabled: boolean
   isSystem?: boolean
 }
 
+// Model 只放身份信息；参数与 systemPrompt 归 Assistant（Cherry 模式）
 interface ModelInfo {
   id: string
   name: string
@@ -38,35 +40,34 @@ interface ModelInfo {
   maxTokens?: number
   supportedTextDelta?: boolean
   enabled: boolean
-  // 新增·模型级配置
-  systemPrompt?: string
-  temperature?: number
-  contextWindow?: number
-  lastTestStatus?: 'untested' | 'testing' | 'success' | 'failed'
-  lastTestLatency?: number
-  lastTestError?: string
 }
+// 连接测试状态（untested/testing/success/failed + 延时/错误）= 纯 UI 态，不持久化进 AppData/Cherry 导出
 ```
 
-## 7.3 Assistant（F1.2）
+## 7.3 Assistant（F1.2 / F2.4 / F2.5）— 模型参数与 systemPrompt 的归属处
 
 ```ts
 interface Assistant {
   id: string
   name: string
-  prompt: string             // 系统提示词
+  prompt: string             // ★ 系统提示词（Cherry 原生，对应 ai-reader 的 systemPrompt）
   enabled: boolean
   isDefault: boolean         // 全局唯一
   emoji?: string
+  description?: string
   model?: string             // 模型 ID
-  temperature?: number
-  topP?: number
-  maxTokens?: number
+  temperature?: number       // ★ 模型参数（Cherry 归属在 Assistant）
+  topP?: number              // ★
+  maxTokens?: number         // ★
+  contextCount?: number      // ★ 上下文轮数（Cherry 原生）
+  streamOutput?: boolean     // ★ 流式开关（Cherry 原生）
   enableWebSearch?: boolean
   createdAt: string
   updatedAt: string
 }
 ```
+
+> 对齐说明：ai-reader 的"每模型 systemPrompt"是因为它无 Assistant 层；web-deepseek 有 Assistant，故 systemPrompt + 参数统一归 Assistant，**完全 Cherry 兼容，零映射**。
 
 ## 7.4 Topic + ChatMessage + MessageBlock（F1 核心）
 
@@ -80,7 +81,6 @@ interface Topic {
   pinned: boolean
   createdAt: string
   updatedAt: string
-  documentId?: string        // 新增·可选关联文档·不进 Cherry 导出
 }
 
 interface ChatMessage {
@@ -96,7 +96,7 @@ interface ChatMessage {
   error?: string
   reasoningContent?: string  // 思考缓存
   usage?: { prompt_tokens?; completion_tokens?; total_tokens? }
-  attachments?: Attachment[]
+  attachments?: Attachment[] // 附件（消息级，非独立实体）
   blocks: MessageBlock[]     // 内容块·唯一来源
 }
 
@@ -107,39 +107,17 @@ interface MessageBlock {
   status: 'streaming' | 'success' | 'error'
   createdAt: string
 }
-```
 
-## 7.5 DocumentEntity（新增·阅读/记忆库 F3/F4）
-
-```ts
-interface DocumentEntity {
+interface Attachment {
   id: string
-  url: string
-  canonicalUrl?: string
-  title: string
-  siteName?: string
-  author?: string
-  description?: string
-  publishedAt?: string
-  markdown: string
-  rawText?: string
-  rawHtml?: string
-  rawHtmlCompressed?: boolean
-  excerpt?: string
-  wordCount: number
-  tokenCount: number
-  contentHash: string
-  extractionMethod: 'defuddle' | 'fallback' | 'manual'
-  source: 'current-page' | 'library'
-  capturedAt: string
-  updatedAt: string
-  lastOpenedAt?: string
-  tags?: string[]
-  syncStatus?: 'local-only' | 'synced' | 'pending' | 'conflict'
+  name: string
+  size: string
+  type?: string
+  url?: string
 }
 ```
 
-## 7.6 Settings（含新增子结构）
+## 7.5 Settings（Cherry 兼容 + 扩展）
 
 ```ts
 interface Settings {
@@ -174,64 +152,53 @@ interface Settings {
   showTopicTime: boolean
   autoCheckUpdate: boolean
   targetLanguage: string
-  // 新增·上下文（驱动 Prompt 组装）
+  // 上下文（驱动 Prompt 组装）
   context: {
     maxContextTokens: number
     includeMetadataInPrompt: boolean
     includeUrlInPrompt: boolean
     includeTitleInPrompt: boolean
-    includeCapturedAtInPrompt: boolean
     includeConversationHistory: boolean
     maxHistoryMessages: number
   }
-  // 新增·抓取
-  capture: {
-    autoExtractOnOpen: boolean       // SPA 部分不生效·UI 标注
-    autoExtractOnTabChange: boolean  // 扩展专属·SPA 不生效·禁用
-    preferCache: boolean
-    saveRawHtml: boolean
-    compressRawHtml: boolean
+  // 同步（WebDAV 用 Cherry 原生字段；S3 为扩展通道）
+  webdavHost: string
+  webdavUser: string
+  webdavPass: string
+  webdavPath: string
+  webdavAutoSync: boolean
+  s3?: {                      // 扩展字段，导出 Cherry 时可剔除
+    endpoint: string; region?: string; bucket: string
+    accessKeyId: string; secretAccessKey: string
+    basePath?: string; forcePathStyle?: boolean
   }
-  // 新增·同步
-  remote: {
-    type: 'none' | 's3' | 'webdav'
-    autoSync: boolean
-    s3?: S3Config
-    webdav?: WebDAVConfig
-  }
+  remoteType?: 'none' | 's3' | 'webdav'
 }
-
-interface S3Config {
-  endpoint: string; region?: string; bucket: string
-  accessKeyId: string; secretAccessKey: string
-  basePath?: string; forcePathStyle?: boolean
-}
-interface WebDAVConfig {
-  url: string; username: string; password: string; basePath?: string
-}
+// 已砍：capture 子结构（无抓取功能）
 ```
 
-## 7.7 每屏消费的数据速查
+## 7.6 每屏消费的数据速查
 
 | 屏 | 主要数据 |
 |---|---|
 | 对话·侧栏 | `assistants[]`、`topics[]`（pinned + updatedAt 排序） |
 | 对话·Topbar | 当前 `assistant`、`selectedModel`、Provider 就绪状态、`uiStore.online` |
-| 对话·消息区 | `topic.messages[]`（blocks/status/usage/model） |
+| 对话·消息区 | `topic.messages[]`（blocks/status/usage/model/attachments） |
 | 对话·输入区 | `draft`、`attachments[]`、`canSend`、`generating`、`settings.sendShortcut` |
 | 对话·空态 | 当前 assistant、`prompts[]`（预设） |
-| 阅读·抓取栏 | 当前 `DocumentEntity` + 抓取状态机 |
-| 阅读·预览 | `document.markdown/rawText/rawHtml` + metadata 全字段 |
-| 记忆库 | `documents[]`（MiniSearch 索引） |
-| 设置·Provider | `providers[]` + `models[]` + 测试状态 |
-| 设置·同步 | `settings.remote` + 同步状态 + 备份列表 |
-| 设置·数据 | documents/topics/models 计数 + IndexedDB 占用 |
+| 搜索 | `topics[]` + `messages[]`（MiniSearch 派生索引） |
+| 设置·Provider | `providers[]` + `models[]` + 测试状态（UI 态） |
+| 设置·Assistant | `assistants[]`（含 prompt + 模型参数） |
+| 设置·同步 | `settings.webdav*` / `settings.s3` + 同步状态 + 备份列表 |
+| 设置·数据 | topics/messages/models 计数 + IndexedDB 占用 |
 
-## 7.8 两套 JSON 格式（重要）
+## 7.7 JSON 格式：备份 = Cherry 导出（二合一）
 
-| 格式 | 内容 | 用途 |
+只有**一套**对外 JSON 格式 = Cherry Studio v5（见 `docs/data-json-schema.md`）：
+
+| 用途 | 格式 | 说明 |
 |---|---|---|
-| **Cherry v5**（`docs/data-json-schema.md`） | providers/assistants/topics/settings/message_blocks，**不含** documents、不含密钥 | 生态兼容的导入导出 |
-| **web-deepseek 备份快照** | 完整 `AppData`（含 documents）+ 同步元数据 | S3/WebDAV 备份/同步/回滚 |
+| Cherry 生态导入导出 | Cherry v5 | providers/assistants/topics/message_blocks/settings；默认不含密钥 |
+| S3/WebDAV 备份 | **同一 Cherry v5** | 备份文件就是 Cherry 能导入的 data.json |
 
-> UI 上两者都要有入口：Cherry 导入导出在"数据管理"；备份上下传/回滚在"同步与存储"。文案要区分清楚，不要混淆。
+> UI 文案统一为"导出 / 备份"同一格式；不再维护第二套同步 schema。密钥默认剔除，需显式勾选才包含。

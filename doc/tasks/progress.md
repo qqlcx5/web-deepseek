@@ -1,8 +1,9 @@
 # Orbit Chat 实施进度
 
 > 基线：[`docs/prd.md`](../../docs/prd.md) v2.0（F-01 ~ F-08）
-> 参考功能：`/Users/another/Documents/OpenSource/ai-reader`（对话流式、上下文 banner、模型选择、停止/重生成、持久化）
+> 参考功能：`/Users/another/Documents/OpenSource/ai-reader`（多 Provider、Prompt 组装、S3/WebDAV 同步），**排除** RSS、AI 自动化、网页抓取/阅读/文档库（产品形态错配）。
 > 组件库：`vue-element-plus-x`（XSender / Bubble / BubbleList / Conversations / Prompts / Welcome / XMarkdown / FilesCard / useSend / useXStream / XRequest）
+> 数据兼容：Cherry Studio v5（`docs/data-json-schema.md`）。模型参数归 Assistant（Cherry 模式），不引入 documents 等新实体。
 > 规则：模块内所有 checklist 完成并通过验收命令，才能将本文件对应模块标记为 `[x]`。
 
 ## 当前状态（基线审计）
@@ -10,7 +11,7 @@
 - `npm run type-check` 通过（0 错误）。
 - 数据层（M01–M07）已实现并通过类型检查。
 - **UI/对话体验层未达基线**：输入区、消息列表、侧边栏、空状态均为手写 DOM，未使用 `vue-element-plus-x` 组件；流式更新因响应式缺陷在 UI 不增量。
-- 待重建工作集中在 M10–M19。
+- **ai-reader 功能移植**收敛为 Cherry 兼容子集（M20–M22、M26–M29），已砍 M23–M25（documents/抓取/预览）。
 
 ## 总体进度
 
@@ -37,22 +38,22 @@
 - [ ] M18 [响应式布局回归](./18-responsive-layout.md)
 - [ ] M19 [质量验证与发布检查](./19-quality-release.md)
 
-### ai-reader 功能移植（进行中）
+### ai-reader 功能移植（进行中，Cherry 兼容）
 
-> 参考 `/Users/another/Documents/OpenSource/ai-reader`，排除 RSS（feed）与 AI 自动化（ai-job/schedule）。
-> 约束：Cherry v5 导入导出格式（`docs/data-json-schema.md`）不变；新增 reader 数据走 `AppData.documents[]` 扩展，不进 Cherry 导出。
+> 排除 RSS（feed）、AI 自动化（ai-job/schedule）、网页抓取/阅读/文档库（产品形态错配）。
+> 约束：Cherry v5 导入导出格式（`docs/data-json-schema.md`）不变；模型参数归 Assistant，systemPrompt 归 Assistant.prompt，不引入 documents。
 > 库选型：S3 = `aws4fetch`，WebDAV = `webdav`（`webdav/web`）。
 
 - [ ] M20 [多 Provider AI 适配](./20-multi-provider-ai.md)（Anthropic + Ollama + 工厂 + 测试连接）
 - [ ] M21 [Prompt 组装与上下文截断](./21-prompt-context-builder.md)
-- [ ] M22 [模型配置增强](./22-model-config-enhance.md)（per-model systemPrompt / contextWindow / 测试状态）
-- [ ] M23 [Documents 数据层扩展](./23-documents-store.md)（AppData.documents[] + 仓库化）
-- [ ] M24 [SPA 网页抓取](./24-web-capture-spa.md)（URL → fetch → defuddle → Document）
-- [ ] M25 [上下文预览](./25-context-preview.md)（Markdown / Raw / Metadata）
-- [ ] M26 [记忆库与全文搜索](./26-library-search.md)（MiniSearch）
+- [ ] M22 [模型配置增强](./22-model-config-enhance.md)（参数归 Assistant；测试纯 UI 态）
+- ~~M23 Documents 数据层~~（已砍：产品形态错配）
+- ~~M24 SPA 网页抓取~~（已砍；"喂内容"改走附件 M16）
+- ~~M25 上下文预览~~（已砍）
+- [ ] M26 [对话历史搜索](./26-history-search.md)（MiniSearch，Cherry 原生 topics/messages）
 - [ ] M27 [S3 + WebDAV 远端传输](./27-remote-transports.md)
-- [ ] M28 [同步与备份引擎](./28-sync-backup.md)（快照上下传 + 版本回滚）
-- [ ] M29 [阅读与存储设置 UI](./29-settings-reader-storage.md)
+- [ ] M28 [同步与备份引擎](./28-sync-backup.md)（备份 = Cherry 导出 JSON，二合一）
+- [ ] M29 [同步与存储设置 UI](./29-settings-sync-storage.md)
 
 ## 推荐执行顺序
 
@@ -61,11 +62,9 @@
 3. **M13 → M14**：侧边栏 Conversations 与空状态 Welcome+Prompts。
 4. **M15 → M16**：模型选择/上下文 banner、附件 FilesCard。
 5. **M17 → M18 → M19**：设置即时生效、响应式回归、发布门禁。
-6. **M20 → M21 → M22**：多 Provider 适配 + Prompt Builder + 模型配置增强（AI 能力，不依赖 documents）。
-7. **M23 → M24 → M25 → M26**：documents 数据层 → 抓取 → 预览 → 搜索。
-8. **M27 → M28 → M29**：远端传输 → 同步引擎 → 设置 UI。
-
-> M10–M16 之间存在 props/事件约定（见各模块的"数据契约"小节），实现时按序，避免接口回退。
+6. **M20 → M21 → M22**：多 Provider 适配 + Prompt Builder + 模型配置（AI 能力，参数归 Assistant）。
+7. **M26**：对话历史搜索（不依赖新实体，可早做）。
+8. **M27 → M28 → M29**：远端传输 → 同步引擎（备份=Cherry JSON）→ 设置 UI。
 
 ## 完成定义
 

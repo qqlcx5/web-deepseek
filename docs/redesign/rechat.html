@@ -1,0 +1,1117 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Orbit Chat</title>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: '#5b56d6',
+            'brand-hover': '#4a45bd',
+            'brand-soft': '#efefff',
+            ink: '#172033',
+            muted: '#667085',
+            line: '#e5e7eb',
+            surface: '#ffffff',
+            surface2: '#f8fafc',
+            success: '#16875d',
+            danger: '#d92d20',
+            warning: '#b54708'
+          },
+          boxShadow: {
+            soft: '0 1px 3px rgba(16,24,40,.06)',
+            panel: '0 6px 20px rgba(16,24,40,.07)',
+            dialog: '0 24px 70px rgba(16,24,40,.24)'
+          }
+        }
+      }
+    }
+  </script>
+
+  <script type="module">
+    import { createApp, ref, computed, nextTick } from 'https://unpkg.com/vue@3/dist/vue.esm-browser.js'
+    import {
+      MessageCircle, Search, Settings, Sun, Moon, Monitor, Plus, MoreHorizontal,
+      ChevronDown, ChevronLeft, ChevronRight, PanelRight, Copy, ThumbsUp, ThumbsDown,
+      RotateCcw, Pencil, Paperclip, Globe, Send, Square, Check, AlertCircle,
+      Cloud, CloudOff, Database, SlidersHorizontal, Command, Menu, X, Trash2,
+      Download, Upload, RefreshCw, Bot, UserRound, Sparkles, FileText, Image,
+      Pin, PinOff, ExternalLink, Keyboard, ShieldCheck, Zap, CheckCircle2,
+      CircleAlert, LoaderCircle
+    } from 'https://unpkg.com/lucide-vue-next@0.468.0/dist/esm/lucide-vue-next.js'
+
+    const app = createApp({
+      components: {
+        MessageCircle, Search, Settings, Sun, Moon, Monitor, Plus, MoreHorizontal,
+        ChevronDown, ChevronLeft, ChevronRight, PanelRight, Copy, ThumbsUp, ThumbsDown,
+        RotateCcw, Pencil, Paperclip, Globe, Send, Square, Check, AlertCircle,
+        Cloud, CloudOff, Database, SlidersHorizontal, Command, Menu, X, Trash2,
+        Download, Upload, RefreshCw, Bot, UserRound, Sparkles, FileText, Image,
+        Pin, PinOff, ExternalLink, Keyboard, ShieldCheck, Zap, CheckCircle2,
+        CircleAlert, LoaderCircle
+      },
+
+      setup() {
+        const activeView = ref('chat')
+        const mobileSidebar = ref(false)
+        const inspectorOpen = ref(true)
+        const settingsGroup = ref('appearance')
+        const showCommand = ref(false)
+        const showNewAssistant = ref(false)
+        const showNewTopic = ref(false)
+        const showDeleteDialog = ref(false)
+        const showTopicMenu = ref(null)
+        const selectedScope = ref('all')
+        const searchQuery = ref('')
+        const draft = ref('')
+        const isGenerating = ref(false)
+        const isDark = ref(false)
+        const toast = ref('')
+        const selectedAssistant = ref('orbit')
+        const selectedTopic = ref('launch')
+        const selectedModel = ref('gpt-4o')
+        const newAssistantName = ref('')
+        const newTopicName = ref('')
+
+        const assistants = ref([
+          { id: 'orbit', name: 'Orbit 助手', initials: 'O', color: 'bg-brand' },
+          { id: 'writer', name: '写作编辑', initials: 'W', color: 'bg-emerald-500' },
+          { id: 'code', name: '代码伙伴', initials: 'C', color: 'bg-sky-500' }
+        ])
+
+        const topics = ref([
+          {
+            id: 'launch',
+            assistant: 'orbit',
+            title: '产品发布计划',
+            pinned: true,
+            updatedAt: '刚刚',
+            messages: [
+              {
+                id: 1,
+                role: 'user',
+                status: 'complete',
+                text: '帮我整理 Orbit Chat 的产品发布计划，重点关注首发版本的核心功能。'
+              },
+              {
+                id: 2,
+                role: 'assistant',
+                status: 'complete',
+                thinking: '我会先按首发必要性拆分功能，再给出分阶段发布建议。',
+                text: '可以。Orbit Chat 的首发版本建议围绕 **本地优先、多 Provider 对话和数据可控** 三条主线展开。\n\n### 首发必须完成\n\n1. **基础对话体验**\n   - OpenAI 兼容、Anthropic、Ollama\n   - 流式正文与思考内容\n   - 停止生成、错误重试\n   - Markdown、代码块、附件展示\n\n2. **本地数据管理**\n   - Assistant 与 Topic 管理\n   - IndexedDB 持久化\n   - Cherry Studio 格式导入导出\n   - 默认导出时剔除 API Key\n\n3. **可恢复与可备份**\n   - S3 / WebDAV 全量备份\n   - 保存状态和同步状态\n   - 清空数据安全确认\n\n建议先让用户可以稳定完成「配置模型 → 开始对话 → 刷新恢复 → 导出备份」这条完整路径。'
+              },
+              {
+                id: 3,
+                role: 'user',
+                status: 'complete',
+                text: '那搜索和移动端应该放在首发吗？'
+              },
+              {
+                id: 4,
+                role: 'assistant',
+                status: 'complete',
+                text: '建议这样安排：\n\n- **搜索**：首发保留基础全文搜索。它直接影响历史消息可找回性，MiniSearch 足够支持 100 个 Topic 和 5000 条消息。\n- **移动端**：首发支持响应式布局，但可以先保证对话、切换 Topic 和发送消息三个核心流程。\n- **高级能力**：分支、工具块、URL 内容注入、自动命名放到第二阶段。'
+              }
+            ]
+          },
+          {
+            id: 'architecture',
+            assistant: 'orbit',
+            title: '本地优先架构讨论',
+            pinned: false,
+            updatedAt: '昨天',
+            messages: [
+              {
+                id: 5,
+                role: 'user',
+                status: 'complete',
+                text: 'IndexedDB 和 Cherry Studio 数据格式应该如何兼容？'
+              },
+              {
+                id: 6,
+                role: 'assistant',
+                status: 'complete',
+                text: '建议将 Cherry JSON 作为导入导出的稳定边界，应用内部使用更适合 UI 更新的实体结构。同步时上传完整 Cherry 快照，避免引入复杂的实体级冲突解决 UI。'
+              }
+            ]
+          },
+          {
+            id: 'marketing',
+            assistant: 'writer',
+            title: 'Landing Page 文案',
+            pinned: false,
+            updatedAt: '3 天前',
+            messages: [
+              {
+                id: 7,
+                role: 'user',
+                status: 'complete',
+                text: '为 Orbit Chat 写一句简洁的产品标语。'
+              },
+              {
+                id: 8,
+                role: 'assistant',
+                status: 'complete',
+                text: '你的模型，你的数据，你的对话空间。'
+              }
+            ]
+          }
+        ])
+
+        const currentAssistant = computed(() =>
+          assistants.value.find(item => item.id === selectedAssistant.value)
+        )
+
+        const currentTopic = computed(() =>
+          topics.value.find(item => item.id === selectedTopic.value)
+        )
+
+        const currentTopics = computed(() =>
+          topics.value
+            .filter(item => item.assistant === selectedAssistant.value)
+            .sort((a, b) => Number(b.pinned) - Number(a.pinned))
+        )
+
+        const searchResults = computed(() => {
+          const query = searchQuery.value.trim().toLowerCase()
+          if (!query) return topics.value.slice().sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+
+          return topics.value.filter(topic => {
+            if (selectedScope.value === 'current' && topic.assistant !== selectedAssistant.value) {
+              return false
+            }
+
+            return topic.title.toLowerCase().includes(query) ||
+              topic.messages.some(message => message.text.toLowerCase().includes(query))
+          })
+        })
+
+        const settings = [
+          { id: 'appearance', label: '外观', icon: Sun },
+          { id: 'input', label: '输入', icon: Keyboard },
+          { id: 'providers', label: 'Provider 与模型', icon: Zap },
+          { id: 'assistants', label: '助手', icon: Bot },
+          { id: 'context', label: '上下文', icon: SlidersHorizontal },
+          { id: 'sync', label: '同步与存储', icon: Cloud },
+          { id: 'data', label: '数据管理', icon: Database }
+        ]
+
+        function notify(message) {
+          toast.value = message
+          setTimeout(() => toast.value = '', 2600)
+        }
+
+        function selectAssistant(id) {
+          selectedAssistant.value = id
+          const firstTopic = topics.value.find(topic => topic.assistant === id)
+          if (firstTopic) selectedTopic.value = firstTopic.id
+          mobileSidebar.value = false
+        }
+
+        function selectTopic(id) {
+          selectedTopic.value = id
+          activeView.value = 'chat'
+          mobileSidebar.value = false
+          showTopicMenu.value = null
+        }
+
+        function createTopic() {
+          const title = newTopicName.value.trim() || '新对话'
+          const id = `topic-${Date.now()}`
+          topics.value.unshift({
+            id,
+            assistant: selectedAssistant.value,
+            title,
+            pinned: false,
+            updatedAt: '刚刚',
+            messages: []
+          })
+          selectedTopic.value = id
+          newTopicName.value = ''
+          showNewTopic.value = false
+          notify('已创建新话题')
+        }
+
+        function createAssistant() {
+          const name = newAssistantName.value.trim() || '新助手'
+          const id = `assistant-${Date.now()}`
+          assistants.value.push({
+            id,
+            name,
+            initials: name.slice(0, 1),
+            color: 'bg-violet-500'
+          })
+          selectedAssistant.value = id
+          newAssistantName.value = ''
+          showNewAssistant.value = false
+          notify('已创建助手')
+        }
+
+        function deleteTopic() {
+          const index = topics.value.findIndex(topic => topic.id === selectedTopic.value)
+          topics.value.splice(index, 1)
+          const next = topics.value.find(topic => topic.assistant === selectedAssistant.value)
+          selectedTopic.value = next?.id || ''
+          showDeleteDialog.value = false
+          notify('话题已删除')
+        }
+
+        function togglePin(topic) {
+          topic.pinned = !topic.pinned
+          showTopicMenu.value = null
+          notify(topic.pinned ? '已置顶话题' : '已取消置顶')
+        }
+
+        function sendMessage() {
+          const text = draft.value.trim()
+          if (!text || !currentTopic.value || isGenerating.value) return
+
+          currentTopic.value.messages.push({
+            id: Date.now(),
+            role: 'user',
+            status: 'complete',
+            text
+          })
+          draft.value = ''
+          isGenerating.value = true
+
+          const assistantMessage = {
+            id: Date.now() + 1,
+            role: 'assistant',
+            status: 'streaming',
+            thinking: '正在整理上下文并生成回答……',
+            text: ''
+          }
+          currentTopic.value.messages.push(assistantMessage)
+
+          const response = '这是一个可交互的 Orbit Chat 原型回答。当前已支持话题切换、搜索视图、设置分组、响应式侧栏，以及模拟流式消息状态。'
+          let index = 0
+          const timer = setInterval(() => {
+            assistantMessage.text += response[index] || ''
+            index += 1
+            if (index >= response.length) {
+              clearInterval(timer)
+              assistantMessage.status = 'complete'
+              assistantMessage.thinking = ''
+              isGenerating.value = false
+              notify('回答已完成')
+            }
+          }, 28)
+        }
+
+        function stopGeneration() {
+          isGenerating.value = false
+          const message = currentTopic.value?.messages.at(-1)
+          if (message?.role === 'assistant' && message.status === 'streaming') {
+            message.status = 'stopped'
+            message.thinking = ''
+          }
+          notify('已停止生成')
+        }
+
+        function copyMessage(text) {
+          navigator.clipboard?.writeText(text)
+          notify('已复制消息')
+        }
+
+        function highlight(text) {
+          if (!searchQuery.value.trim()) return text
+          const escaped = searchQuery.value.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+          return text.replace(new RegExp(`(${escaped})`, 'gi'), '<mark class="bg-yellow-200 rounded px-0.5">$1</mark>')
+        }
+
+        function openSearchFromSidebar() {
+          activeView.value = 'search'
+          selectedScope.value = 'current'
+          mobileSidebar.value = false
+        }
+
+        function handleShortcut(event) {
+          if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+            event.preventDefault()
+            showCommand.value = true
+          }
+          if (event.key === 'Escape') {
+            showCommand.value = false
+            mobileSidebar.value = false
+          }
+        }
+
+        window.addEventListener('keydown', handleShortcut)
+
+        return {
+          activeView, mobileSidebar, inspectorOpen, settingsGroup, showCommand,
+          showNewAssistant, showNewTopic, showDeleteDialog, selectedScope,
+          searchQuery, draft, isGenerating, isDark, toast, selectedAssistant,
+          selectedTopic, selectedModel, newAssistantName, newTopicName,
+          assistants, topics, settings, currentAssistant, currentTopic,
+          currentTopics, searchResults, selectAssistant, selectTopic, createTopic,
+          createAssistant, deleteTopic, togglePin, sendMessage, stopGeneration,
+          copyMessage, highlight, openSearchFromSidebar, notify
+        }
+      },
+
+      template: `
+        <div
+          :class="{ dark: isDark }"
+          class="min-h-screen bg-slate-50 text-ink"
+        >
+          <div class="flex h-screen overflow-hidden">
+
+            <!-- Desktop rail -->
+            <aside class="hidden md:flex w-[68px] shrink-0 flex-col items-center border-r border-line bg-white py-4">
+              <div class="mb-8 flex h-10 w-10 items-center justify-center rounded-xl bg-brand text-white shadow-soft">
+                <OrbitIcon />
+              </div>
+
+              <nav class="flex flex-col gap-3">
+                <button
+                  @click="activeView = 'chat'"
+                  :class="activeView === 'chat' ? 'bg-brand-soft text-brand' : 'text-muted hover:bg-slate-100'"
+                  class="flex h-11 w-11 items-center justify-center rounded-xl transition"
+                  title="对话"
+                  aria-label="对话"
+                >
+                  <MessageCircle :size="20" />
+                </button>
+
+                <button
+                  @click="activeView = 'search'"
+                  :class="activeView === 'search' ? 'bg-brand-soft text-brand' : 'text-muted hover:bg-slate-100'"
+                  class="flex h-11 w-11 items-center justify-center rounded-xl transition"
+                  title="搜索"
+                  aria-label="搜索"
+                >
+                  <Search :size="20" />
+                </button>
+
+                <button
+                  @click="activeView = 'settings'"
+                  :class="activeView === 'settings' ? 'bg-brand-soft text-brand' : 'text-muted hover:bg-slate-100'"
+                  class="flex h-11 w-11 items-center justify-center rounded-xl transition"
+                  title="设置"
+                  aria-label="设置"
+                >
+                  <Settings :size="20" />
+                </button>
+              </nav>
+
+              <div class="mt-auto flex flex-col items-center gap-4">
+                <button
+                  @click="isDark = !isDark"
+                  class="text-muted hover:text-ink"
+                  title="切换主题"
+                  aria-label="切换主题"
+                >
+                  <Sun v-if="!isDark" :size="19" />
+                  <Moon v-else :size="19" />
+                </button>
+
+                <div class="relative">
+                  <div class="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-sm font-semibold text-slate-600">L</div>
+                  <span class="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-white bg-emerald-500"></span>
+                </div>
+              </div>
+            </aside>
+
+            <!-- Mobile header -->
+            <header class="fixed left-0 right-0 top-0 z-30 flex h-14 items-center justify-between border-b border-line bg-white px-4 md:hidden">
+              <button @click="mobileSidebar = true" title="打开菜单" aria-label="打开菜单">
+                <Menu :size="21" />
+              </button>
+              <div class="flex items-center gap-2 font-semibold">
+                <div class="flex h-7 w-7 items-center justify-center rounded-lg bg-brand text-white">
+                  <OrbitIcon :size="16" />
+                </div>
+                Orbit Chat
+              </div>
+              <button @click="showCommand = true" title="打开命令面板" aria-label="打开命令面板">
+                <Command :size="20" />
+              </button>
+            </header>
+
+            <!-- Chat sidebar -->
+            <aside
+              v-if="activeView === 'chat'"
+              :class="mobileSidebar ? 'translate-x-0' : '-translate-x-full md:translate-x-0'"
+              class="fixed inset-y-0 left-0 z-50 flex w-[286px] shrink-0 flex-col border-r border-line bg-white transition-transform md:relative md:z-0"
+            >
+              <div class="flex h-[60px] items-center justify-between border-b border-line px-4">
+                <div class="flex items-center gap-2 font-semibold">
+                  <div class="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-soft text-brand">
+                    <Sparkles :size="17" />
+                  </div>
+                  Orbit Chat
+                </div>
+                <button @click="mobileSidebar = false" class="md:hidden text-muted" title="关闭侧栏" aria-label="关闭侧栏">
+                  <X :size="19" />
+                </button>
+              </div>
+
+              <div class="border-b border-line p-3">
+                <div class="mb-3 flex items-center justify-between">
+                  <span class="text-xs font-semibold uppercase tracking-wider text-muted">助手</span>
+                  <button @click="showNewAssistant = true" class="text-brand hover:text-brand-hover" title="新建助手" aria-label="新建助手">
+                    <Plus :size="17" />
+                  </button>
+                </div>
+
+                <div class="flex gap-2 overflow-x-auto pb-1">
+                  <button
+                    v-for="assistant in assistants"
+                    :key="assistant.id"
+                    @click="selectAssistant(assistant.id)"
+                    :class="selectedAssistant === assistant.id ? 'border-brand bg-brand-soft' : 'border-transparent hover:bg-slate-50'"
+                    class="flex min-w-fit items-center gap-2 rounded-lg border px-2 py-1.5 text-left transition"
+                  >
+                    <span :class="assistant.color" class="flex h-6 w-6 items-center justify-center rounded-md text-xs font-semibold text-white">
+                      {{ assistant.initials }}
+                    </span>
+                    <span class="max-w-[110px] truncate text-xs font-medium">{{ assistant.name }}</span>
+                  </button>
+                </div>
+              </div>
+
+              <div class="flex items-center justify-between px-4 pb-2 pt-4">
+                <span class="text-xs font-semibold uppercase tracking-wider text-muted">话题</span>
+                <div class="flex gap-1">
+                  <button @click="openSearchFromSidebar" class="rounded-md p-1.5 text-muted hover:bg-slate-100 hover:text-ink" title="搜索话题" aria-label="搜索话题">
+                    <Search :size="16" />
+                  </button>
+                  <button @click="showNewTopic = true" class="rounded-md p-1.5 text-brand hover:bg-brand-soft" title="新建话题" aria-label="新建话题">
+                    <Plus :size="16" />
+                  </button>
+                </div>
+              </div>
+
+              <div class="flex-1 overflow-y-auto px-2">
+                <div v-if="currentTopics.length === 0" class="px-4 py-12 text-center">
+                  <MessageCircle class="mx-auto mb-3 text-slate-300" :size="28" />
+                  <p class="text-sm font-medium">还没有话题</p>
+                  <button @click="showNewTopic = true" class="mt-3 text-sm text-brand">开始新对话</button>
+                </div>
+
+                <div v-else class="space-y-1">
+                  <div
+                    v-for="topic in currentTopics"
+                    :key="topic.id"
+                    @click="selectTopic(topic.id)"
+                    :class="selectedTopic === topic.id ? 'bg-brand-soft text-brand' : 'text-slate-600 hover:bg-slate-50'"
+                    class="group relative flex cursor-pointer items-center gap-3 rounded-lg px-3 py-3 transition"
+                  >
+                    <MessageCircle :size="16" class="shrink-0 opacity-70" />
+                    <div class="min-w-0 flex-1">
+                      <div class="truncate text-sm font-medium">{{ topic.title }}</div>
+                      <div class="mt-0.5 text-[11px] opacity-60">{{ topic.updatedAt }} · {{ topic.messages.length }} 条消息</div>
+                    </div>
+
+                    <Pin v-if="topic.pinned" :size="13" class="shrink-0 opacity-70" />
+
+                    <button
+                      @click.stop="showTopicMenu = showTopicMenu === topic.id ? null : topic.id"
+                      class="hidden rounded p-1 hover:bg-white group-hover:block"
+                      title="话题菜单"
+                      aria-label="话题菜单"
+                    >
+                      <MoreHorizontal :size="16" />
+                    </button>
+
+                    <div v-if="showTopicMenu === topic.id" class="absolute right-2 top-10 z-20 w-36 rounded-lg border border-line bg-white p-1.5 text-sm shadow-panel">
+                      <button @click.stop="togglePin(topic)" class="flex w-full items-center gap-2 rounded-md px-2 py-2 hover:bg-slate-50">
+                        <Pin :size="14" /> {{ topic.pinned ? '取消置顶' : '置顶' }}
+                      </button>
+                      <button @click.stop="showDeleteDialog = true; selectedTopic = topic.id; showTopicMenu = null" class="flex w-full items-center gap-2 rounded-md px-2 py-2 text-danger hover:bg-red-50">
+                        <Trash2 :size="14" /> 删除话题
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="border-t border-line p-3">
+                <div class="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2.5">
+                  <div class="flex items-center gap-2">
+                    <Cloud :size="16" class="text-success" />
+                    <div>
+                      <div class="text-xs font-medium">已保存</div>
+                      <div class="text-[10px] text-muted">本地 IndexedDB</div>
+                    </div>
+                  </div>
+                  <button @click="activeView = 'settings'; settingsGroup = 'sync'" class="text-muted hover:text-brand" title="同步设置" aria-label="同步设置">
+                    <ChevronRight :size="16" />
+                  </button>
+                </div>
+              </div>
+            </aside>
+
+            <div v-if="mobileSidebar" @click="mobileSidebar = false" class="fixed inset-0 z-40 bg-slate-900/30 md:hidden"></div>
+
+            <!-- Main -->
+            <main class="min-w-0 flex-1 bg-white pt-14 md:pt-0">
+
+              <!-- Chat view -->
+              <section v-if="activeView === 'chat'" class="flex h-full min-w-0">
+                <div class="flex min-w-0 flex-1 flex-col">
+                  <header class="flex h-[60px] shrink-0 items-center justify-between border-b border-line px-4 lg:px-6">
+                    <div class="flex min-w-0 items-center gap-3">
+                      <button @click="mobileSidebar = true" class="md:hidden text-muted" title="打开话题侧栏" aria-label="打开话题侧栏">
+                        <Menu :size="19" />
+                      </button>
+                      <div class="min-w-0">
+                        <div class="truncate text-sm font-semibold">{{ currentTopic?.title || '新对话' }}</div>
+                        <div class="flex items-center gap-1.5 text-[11px] text-muted">
+                          <span class="h-1.5 w-1.5 rounded-full bg-success"></span>
+                          {{ currentAssistant?.name }} · {{ selectedModel }} · OpenAI Compatible
+                        </div>
+                      </div>
+                    </div>
+
+                    <div class="flex items-center gap-2">
+                      <button @click="showCommand = true" class="hidden items-center gap-2 rounded-lg border border-line px-2.5 py-1.5 text-xs text-muted hover:bg-slate-50 sm:flex">
+                        <Command :size="14" /> 快捷操作 <kbd class="rounded bg-slate-100 px-1.5 py-0.5 text-[10px]">⌘K</kbd>
+                      </button>
+                      <button @click="inspectorOpen = !inspectorOpen" class="rounded-lg p-2 text-muted hover:bg-slate-100 hover:text-ink" title="切换检查器" aria-label="切换检查器">
+                        <PanelRight :size="18" />
+                      </button>
+                    </div>
+                  </header>
+
+                  <div class="flex-1 overflow-y-auto px-4 py-8 lg:px-8">
+                    <div class="mx-auto max-w-[820px]">
+                      <div v-if="!currentTopic || currentTopic.messages.length === 0" class="flex min-h-[480px] flex-col items-center justify-center text-center">
+                        <div class="mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-brand-soft text-brand">
+                          <Sparkles :size="30" />
+                        </div>
+                        <h1 class="text-2xl font-semibold">你好，我是 Orbit</h1>
+                        <p class="mt-2 max-w-md text-sm leading-6 text-muted">本地优先的多 Provider AI 对话空间。选择模型，开始一段新对话。</p>
+                        <div class="mt-8 grid w-full max-w-lg gap-2 sm:grid-cols-2">
+                          <button @click="draft = '帮我制定一个产品发布计划'" class="rounded-xl border border-line p-3 text-left text-sm hover:border-brand hover:bg-brand-soft">
+                            <span class="mb-1 block font-medium">制定产品发布计划</span>
+                            <span class="text-xs text-muted">拆解目标、里程碑和风险</span>
+                          </button>
+                          <button @click="draft = '帮我总结这段内容'" class="rounded-xl border border-line p-3 text-left text-sm hover:border-brand hover:bg-brand-soft">
+                            <span class="mb-1 block font-medium">总结一段内容</span>
+                            <span class="text-xs text-muted">提取重点并整理结构</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      <div v-else class="space-y-7">
+                        <article v-for="message in currentTopic.messages" :key="message.id" :class="message.role === 'user' ? 'items-end' : 'items-start'" class="group flex gap-3">
+                          <div v-if="message.role === 'assistant'" class="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand text-white">
+                            <Sparkles :size="16" />
+                          </div>
+
+                          <div :class="message.role === 'user' ? 'max-w-[86%] items-end' : 'max-w-[92%] items-start'" class="flex flex-col">
+                            <div v-if="message.role === 'assistant' && message.thinking" class="mb-2 w-full rounded-xl border border-line bg-slate-50">
+                              <div class="flex items-center gap-2 px-3 py-2 text-xs text-muted">
+                                <LoaderCircle v-if="message.status === 'streaming'" class="animate-spin" :size="14" />
+                                <Check v-else :size="14" class="text-success" />
+                                {{ message.status === 'streaming' ? '思考中' : '已完成思考' }}
+                                <ChevronDown :size="14" class="ml-auto" />
+                              </div>
+                            </div>
+
+                            <div
+                              :class="message.role === 'user' ? 'rounded-2xl rounded-tr-md bg-brand text-white' : 'rounded-2xl rounded-tl-md bg-slate-50 text-slate-700'"
+                              class="whitespace-pre-wrap px-4 py-3 text-[14px] leading-7"
+                            >
+                              {{ message.text }}
+                              <span v-if="message.status === 'streaming'" class="ml-1 inline-block h-4 w-1 animate-pulse bg-brand align-middle"></span>
+                            </div>
+
+                            <div v-if="message.status === 'error'" class="mt-2 flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-danger">
+                              <AlertCircle :size="16" /> 请求失败，请检查 Provider 配置
+                              <button class="font-medium underline">重试</button>
+                            </div>
+
+                            <div v-if="message.status === 'stopped'" class="mt-1 text-xs text-muted">已停止生成</div>
+
+                            <div v-if="message.role === 'assistant' && message.status === 'complete'" class="mt-2 flex items-center gap-1 opacity-0 transition group-hover:opacity-100">
+                              <button @click="copyMessage(message.text)" class="rounded-md p-1.5 text-muted hover:bg-slate-100" title="复制" aria-label="复制"><Copy :size="14" /></button>
+                              <button class="rounded-md p-1.5 text-muted hover:bg-slate-100" title="赞" aria-label="赞"><ThumbsUp :size="14" /></button>
+                              <button class="rounded-md p-1.5 text-muted hover:bg-slate-100" title="踩" aria-label="踩"><ThumbsDown :size="14" /></button>
+                              <button class="rounded-md p-1.5 text-muted hover:bg-slate-100" title="重新生成" aria-label="重新生成"><RotateCcw :size="14" /></button>
+                            </div>
+                          </div>
+
+                          <div v-if="message.role === 'user'" class="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-500">
+                            <UserRound :size="16" />
+                          </div>
+                        </article>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="shrink-0 px-4 pb-4 lg:px-8">
+                    <div class="mx-auto max-w-[820px]">
+                      <div v-if="isGenerating" class="mb-2 flex items-center justify-between rounded-lg bg-brand-soft px-3 py-2 text-xs text-brand">
+                        <span class="flex items-center gap-2"><LoaderCircle class="animate-spin" :size="14" /> 正在生成回答</span>
+                        <button @click="stopGeneration" class="flex items-center gap-1 font-medium"><Square :size="12" /> 停止</button>
+                      </div>
+
+                      <div class="rounded-2xl border border-line bg-white shadow-soft focus-within:border-brand focus-within:ring-2 focus-within:ring-brand/10">
+                        <textarea
+                          v-model="draft"
+                          @keydown.enter.exact.prevent="sendMessage"
+                          rows="2"
+                          placeholder="输入消息，按 Enter 发送"
+                          class="w-full resize-none bg-transparent px-4 pt-4 text-sm outline-none placeholder:text-faint"
+                        ></textarea>
+
+                        <div class="flex items-center justify-between px-3 pb-3 pt-2">
+                          <div class="flex items-center gap-1">
+                            <button class="rounded-lg p-2 text-muted hover:bg-slate-100 hover:text-ink" title="添加附件" aria-label="添加附件"><Paperclip :size="17" /></button>
+                            <button class="rounded-lg p-2 text-muted hover:bg-slate-100 hover:text-ink" title="插入网页" aria-label="插入网页"><Globe :size="17" /></button>
+                            <span class="ml-2 text-[11px] text-faint">支持 Markdown · ⌘ Enter</span>
+                          </div>
+
+                          <button
+                            @click="isGenerating ? stopGeneration() : sendMessage()"
+                            :disabled="!draft.trim() && !isGenerating"
+                            :class="isGenerating ? 'bg-slate-800' : 'bg-brand disabled:bg-slate-200'"
+                            class="flex h-9 w-9 items-center justify-center rounded-xl text-white transition hover:opacity-90 disabled:cursor-not-allowed"
+                            :title="isGenerating ? '停止生成' : '发送'"
+                            :aria-label="isGenerating ? '停止生成' : '发送'"
+                          >
+                            <Square v-if="isGenerating" :size="15" />
+                            <Send v-else :size="16" />
+                          </button>
+                        </div>
+                      </div>
+
+                      <div class="mt-2 flex items-center justify-center gap-2 text-[11px] text-muted">
+                        <ShieldCheck :size="13" class="text-success" />
+                        数据保存在本地浏览器
+                        <span>·</span>
+                        <span>GPT-4o</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Inspector -->
+                <aside v-if="inspectorOpen" class="hidden w-[304px] shrink-0 border-l border-line bg-slate-50 xl:block">
+                  <div class="flex h-[60px] items-center justify-between border-b border-line bg-white px-4">
+                    <span class="text-sm font-semibold">检查器</span>
+                    <button @click="inspectorOpen = false" class="text-muted hover:text-ink" title="关闭检查器" aria-label="关闭检查器"><X :size="17" /></button>
+                  </div>
+
+                  <div class="p-4">
+                    <div class="mb-4 flex rounded-lg bg-slate-200/70 p-1 text-xs">
+                      <button class="flex-1 rounded-md bg-white py-2 font-medium shadow-sm">消息大纲</button>
+                      <button class="flex-1 py-2 text-muted">元信息</button>
+                    </div>
+
+                    <div class="space-y-2">
+                      <div v-for="(message, index) in currentTopic?.messages || []" :key="message.id" class="flex gap-2 rounded-lg bg-white p-3 text-xs">
+                        <span class="font-semibold text-brand">{{ index + 1 }}</span>
+                        <span class="line-clamp-2 text-slate-600">{{ message.text || '生成中……' }}</span>
+                      </div>
+                    </div>
+
+                    <div class="mt-5 rounded-xl border border-line bg-white p-4">
+                      <div class="mb-3 flex items-center gap-2 text-xs font-semibold">
+                        <Zap :size="14" class="text-brand" /> 当前上下文
+                      </div>
+                      <div class="space-y-2 text-xs text-muted">
+                        <div class="flex justify-between"><span>历史消息</span><span>12 / 20</span></div>
+                        <div class="flex justify-between"><span>Prompt Tokens</span><span>2,480</span></div>
+                        <div class="h-1.5 overflow-hidden rounded-full bg-slate-100"><div class="h-full w-2/5 rounded-full bg-brand"></div></div>
+                      </div>
+                    </div>
+                  </div>
+                </aside>
+              </section>
+
+              <!-- Search view -->
+              <section v-if="activeView === 'search'" class="h-full overflow-y-auto">
+                <div class="mx-auto max-w-[1000px] px-5 py-8 lg:px-10">
+                  <div class="mb-8">
+                    <div class="flex items-center justify-between">
+                      <div>
+                        <h1 class="text-2xl font-semibold">搜索历史</h1>
+                        <p class="mt-1 text-sm text-muted">跨 Assistant 和 Topic 搜索消息内容</p>
+                      </div>
+                      <div class="hidden items-center gap-2 rounded-lg bg-slate-50 px-3 py-2 text-xs text-muted sm:flex">
+                        <Search :size="14" /> MiniSearch 已索引
+                      </div>
+                    </div>
+
+                    <div class="mt-6 flex flex-col gap-3 sm:flex-row">
+                      <div class="relative flex-1">
+                        <Search class="absolute left-3 top-1/2 -translate-y-1/2 text-muted" :size="18" />
+                        <input v-model="searchQuery" autofocus placeholder="搜索 Topic、消息正文……" class="h-12 w-full rounded-xl border border-line bg-white pl-10 pr-4 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand/10" />
+                        <kbd class="absolute right-3 top-1/2 hidden -translate-y-1/2 rounded bg-slate-100 px-2 py-1 text-[10px] text-muted sm:block">⌘ K</kbd>
+                      </div>
+                      <select v-model="selectedScope" class="h-12 rounded-xl border border-line bg-white px-4 text-sm outline-none focus:border-brand">
+                        <option value="all">全部助手</option>
+                        <option value="current">当前助手</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div v-if="searchResults.length" class="space-y-3">
+                    <div class="mb-3 text-xs text-muted">找到 {{ searchResults.length }} 个相关话题</div>
+
+                    <article
+                      v-for="topic in searchResults"
+                      :key="topic.id"
+                      @click="selectTopic(topic.id)"
+                      class="cursor-pointer rounded-xl border border-line bg-white p-4 transition hover:border-brand hover:shadow-soft"
+                    >
+                      <div class="flex items-start justify-between gap-4">
+                        <div class="min-w-0">
+                          <div class="flex items-center gap-2">
+                            <h2 class="truncate text-sm font-semibold">{{ topic.title }}</h2>
+                            <Pin v-if="topic.pinned" :size="13" class="text-brand" />
+                          </div>
+                          <div class="mt-1 text-xs text-muted">
+                            {{ assistants.find(a => a.id === topic.assistant)?.name }} · {{ topic.updatedAt }}
+                          </div>
+                        </div>
+                        <ExternalLink :size="16" class="shrink-0 text-muted" />
+                      </div>
+
+                      <div class="mt-4 space-y-2">
+                        <div v-for="message in topic.messages.slice(-2)" :key="message.id" class="flex gap-3 rounded-lg bg-slate-50 p-3">
+                          <span :class="message.role === 'user' ? 'bg-brand text-white' : 'bg-white text-brand'" class="flex h-6 w-6 shrink-0 items-center justify-center rounded-md">
+                            <UserRound v-if="message.role === 'user'" :size="13" />
+                            <Bot v-else :size="13" />
+                          </span>
+                          <p v-html="highlight(message.text)" class="line-clamp-2 text-sm leading-6 text-slate-600"></p>
+                        </div>
+                      </div>
+                    </article>
+                  </div>
+
+                  <div v-else class="flex min-h-[380px] flex-col items-center justify-center text-center">
+                    <Search :size="36" class="text-slate-300" />
+                    <h2 class="mt-4 font-medium">没有找到相关内容</h2>
+                    <p class="mt-1 text-sm text-muted">尝试搜索其他关键词</p>
+                  </div>
+                </div>
+              </section>
+
+              <!-- Settings view -->
+              <section v-if="activeView === 'settings'" class="h-full overflow-y-auto">
+                <div class="mx-auto flex min-h-full max-w-[1060px] flex-col px-5 py-8 lg:flex-row lg:gap-12 lg:px-10">
+                  <div class="mb-8 lg:w-[210px] lg:shrink-0">
+                    <h1 class="text-2xl font-semibold">设置</h1>
+                    <p class="mt-1 text-sm text-muted">配置 Orbit Chat</p>
+
+                    <nav class="mt-7 space-y-1">
+                      <button
+                        v-for="item in settings"
+                        :key="item.id"
+                        @click="settingsGroup = item.id"
+                        :class="settingsGroup === item.id ? 'bg-brand-soft text-brand font-medium' : 'text-muted hover:bg-slate-50 hover:text-ink'"
+                        class="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm"
+                      >
+                        <component :is="item.icon" :size="17" />
+                        {{ item.label }}
+                      </button>
+                    </nav>
+                  </div>
+
+                  <div class="min-w-0 flex-1">
+                    <div v-if="settingsGroup === 'appearance'" class="setting-panel">
+                      <SettingHeader title="外观" description="调整界面显示方式，修改会立即生效。" />
+                      <SettingRow title="主题" description="选择浅色、深色或跟随系统">
+                        <div class="flex gap-2">
+                          <button @click="isDark = false" :class="!isDark ? 'border-brand bg-brand-soft text-brand' : 'border-line'" class="flex items-center gap-2 rounded-lg border px-3 py-2 text-sm"><Sun :size="15" />浅色</button>
+                          <button @click="isDark = true" :class="isDark ? 'border-brand bg-brand-soft text-brand' : 'border-line'" class="flex items-center gap-2 rounded-lg border px-3 py-2 text-sm"><Moon :size="15" />深色</button>
+                          <button class="hidden items-center gap-2 rounded-lg border border-line px-3 py-2 text-sm sm:flex"><Monitor :size="15" />自动</button>
+                        </div>
+                      </SettingRow>
+                      <SettingRow title="消息样式" description="选择消息的视觉密度">
+                        <select class="rounded-lg border border-line px-3 py-2 text-sm outline-none"><option>简洁</option><option>气泡</option></select>
+                      </SettingRow>
+                      <SettingRow title="字体大小" description="调整消息正文和界面文字大小">
+                        <input type="range" min="12" max="18" value="14" class="accent-brand" />
+                      </SettingRow>
+                      <SettingRow title="显示分隔线" description="在不同内容区域之间显示分隔线">
+                        <Toggle :checked="true" />
+                      </SettingRow>
+                    </div>
+
+                    <div v-if="settingsGroup === 'input'" class="setting-panel">
+                      <SettingHeader title="输入" description="配置消息发送和输入区行为。" />
+                      <SettingRow title="发送快捷键" description="选择 Enter 是否直接发送消息">
+                        <select class="rounded-lg border border-line px-3 py-2 text-sm outline-none"><option>Enter 发送</option><option>⌘ Enter 发送</option></select>
+                      </SettingRow>
+                      <SettingRow title="自动滚动" description="生成时自动跟随最新消息">
+                        <Toggle :checked="true" />
+                      </SettingRow>
+                      <SettingRow title="Token 预估" description="在输入区显示预计 Token 数量">
+                        <Toggle :checked="true" />
+                      </SettingRow>
+                      <SettingRow title="粘贴长文本转文件" description="超过阈值的文本自动转换为附件">
+                        <Toggle :checked="true" />
+                      </SettingRow>
+                    </div>
+
+                    <div v-if="settingsGroup === 'providers'" class="setting-panel">
+                      <SettingHeader title="Provider 与模型" description="管理 API 连接和可用模型。" />
+                      <div class="mb-5 flex items-center justify-between rounded-xl border border-line bg-white p-4">
+                        <div class="flex items-center gap-3">
+                          <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600"><Zap :size="19" /></div>
+                          <div><div class="font-medium">OpenAI Compatible</div><div class="text-xs text-muted">api.openai.com</div></div>
+                        </div>
+                        <div class="flex items-center gap-2 text-xs text-success"><span class="h-2 w-2 rounded-full bg-success"></span>已连接</div>
+                      </div>
+                      <div class="rounded-xl border border-line bg-white">
+                        <div class="flex items-center justify-between border-b border-line p-4">
+                          <div><div class="font-medium">模型</div><div class="text-xs text-muted">启用的模型会出现在对话顶部</div></div>
+                          <button class="flex items-center gap-1 rounded-lg bg-brand px-3 py-2 text-xs font-medium text-white"><Plus :size="14" />添加模型</button>
+                        </div>
+                        <div class="divide-y divide-line">
+                          <div class="flex items-center justify-between p-4">
+                            <div><div class="text-sm font-medium">GPT-4o</div><div class="text-xs text-muted">输入与输出能力 · 128K context</div></div>
+                            <Toggle :checked="true" />
+                          </div>
+                          <div class="flex items-center justify-between p-4">
+                            <div><div class="text-sm font-medium">GPT-4o-mini</div><div class="text-xs text-muted">快速响应 · 128K context</div></div>
+                            <Toggle :checked="true" />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div v-if="settingsGroup === 'assistants'" class="setting-panel">
+                      <SettingHeader title="助手" description="为不同任务配置独立的系统提示词和模型参数。" />
+                      <div class="space-y-3">
+                        <div v-for="assistant in assistants" :key="assistant.id" class="flex items-center justify-between rounded-xl border border-line bg-white p-4">
+                          <div class="flex items-center gap-3">
+                            <span :class="assistant.color" class="flex h-10 w-10 items-center justify-center rounded-lg text-white">{{ assistant.initials }}</span>
+                            <div><div class="font-medium">{{ assistant.name }}</div><div class="text-xs text-muted">GPT-4o · 默认上下文 20 条</div></div>
+                          </div>
+                          <button class="rounded-lg border border-line px-3 py-2 text-xs hover:bg-slate-50">编辑</button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div v-if="settingsGroup === 'context'" class="setting-panel">
+                      <SettingHeader title="上下文" description="控制发送给模型的历史内容。" />
+                      <SettingRow title="历史消息条数" description="每次请求携带的最近消息数量">
+                        <input value="20" class="w-20 rounded-lg border border-line px-3 py-2 text-right text-sm outline-none" />
+                      </SettingRow>
+                      <SettingRow title="最大上下文 Token" description="超过限制时优先保留最近消息">
+                        <input value="128000" class="w-28 rounded-lg border border-line px-3 py-2 text-right text-sm outline-none" />
+                      </SettingRow>
+                      <SettingRow title="注入话题标题" description="把当前 Topic 标题加入系统上下文">
+                        <Toggle :checked="true" />
+                      </SettingRow>
+                    </div>
+
+                    <div v-if="settingsGroup === 'sync'" class="setting-panel">
+                      <SettingHeader title="同步与存储" description="使用 S3 或 WebDAV 备份 Cherry Studio 兼容快照。" />
+                      <div class="mb-5 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+                        <div class="flex items-start gap-3">
+                          <CheckCircle2 class="mt-0.5 text-success" :size="18" />
+                          <div><div class="text-sm font-medium text-emerald-800">本地数据已保存</div><div class="mt-1 text-xs text-emerald-700">最后保存：刚刚 · 12 个 Topic · 48 条消息</div></div>
+                        </div>
+                      </div>
+                      <div class="rounded-xl border border-line bg-white p-4">
+                        <div class="mb-4 flex items-center justify-between">
+                          <div><div class="font-medium">远端备份</div><div class="text-xs text-muted">当前未配置远端存储</div></div>
+                          <button class="rounded-lg border border-line px-3 py-2 text-xs hover:bg-slate-50">配置</button>
+                        </div>
+                        <div class="grid gap-3 sm:grid-cols-2">
+                          <button class="flex items-center gap-3 rounded-lg border border-line p-4 text-left hover:border-brand"><Cloud :size="19" class="text-brand" /><span><b class="block text-sm">S3</b><small class="text-xs text-muted">兼容 AWS S3 存储</small></span></button>
+                          <button class="flex items-center gap-3 rounded-lg border border-line p-4 text-left hover:border-brand"><Database :size="19" class="text-brand" /><span><b class="block text-sm">WebDAV</b><small class="text-xs text-muted">自托管文件服务器</small></span></button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div v-if="settingsGroup === 'data'" class="setting-panel">
+                      <SettingHeader title="数据管理" description="导入、导出或清理本地数据。" />
+                      <div class="grid gap-3 sm:grid-cols-2">
+                        <button @click="notify('已准备导出 Cherry JSON')" class="flex items-center gap-3 rounded-xl border border-line bg-white p-4 text-left hover:border-brand"><Download class="text-brand" :size="19" /><span><b class="block text-sm">导出数据</b><small class="text-xs text-muted">默认不包含 API Key</small></span></button>
+                        <button @click="notify('请选择 Cherry JSON 文件')" class="flex items-center gap-3 rounded-xl border border-line bg-white p-4 text-left hover:border-brand"><Upload class="text-brand" :size="19" /><span><b class="block text-sm">导入数据</b><small class="text-xs text-muted">兼容 Cherry Studio v5</small></span></button>
+                        <button @click="notify('搜索索引重建完成')" class="flex items-center gap-3 rounded-xl border border-line bg-white p-4 text-left hover:border-brand"><RefreshCw class="text-brand" :size="19" /><span><b class="block text-sm">重建索引</b><small class="text-xs text-muted">重新扫描所有消息</small></span></button>
+                        <button @click="showDeleteDialog = true" class="flex items-center gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-left text-danger hover:bg-red-100"><Trash2 :size="19" /><span><b class="block text-sm">清空本地数据</b><small class="text-xs text-red-600">此操作不可撤销</small></span></button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </section>
+            </main>
+
+            <!-- Mobile bottom nav -->
+            <nav class="fixed bottom-0 left-0 right-0 z-30 flex h-[58px] items-center justify-around border-t border-line bg-white md:hidden">
+              <button @click="activeView = 'chat'" :class="activeView === 'chat' ? 'text-brand' : 'text-muted'" class="flex flex-col items-center gap-1 text-[10px]"><MessageCircle :size="19" />对话</button>
+              <button @click="activeView = 'search'" :class="activeView === 'search' ? 'text-brand' : 'text-muted'" class="flex flex-col items-center gap-1 text-[10px]"><Search :size="19" />搜索</button>
+              <button @click="activeView = 'settings'" :class="activeView === 'settings' ? 'text-brand' : 'text-muted'" class="flex flex-col items-center gap-1 text-[10px]"><Settings :size="19" />设置</button>
+            </nav>
+          </div>
+
+          <!-- Command panel -->
+          <div v-if="showCommand" @click.self="showCommand = false" class="fixed inset-0 z-[80] flex items-start justify-center bg-slate-900/30 px-4 pt-[15vh]">
+            <div class="w-full max-w-[560px] overflow-hidden rounded-2xl border border-line bg-white shadow-dialog">
+              <div class="flex items-center gap-3 border-b border-line px-4">
+                <Search class="text-muted" :size="19" />
+                <input autofocus placeholder="搜索话题、设置项或操作……" class="h-14 flex-1 text-sm outline-none" />
+                <kbd class="rounded bg-slate-100 px-2 py-1 text-[10px] text-muted">ESC</kbd>
+              </div>
+              <div class="p-2">
+                <button @click="showNewTopic = true; showCommand = false" class="flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left text-sm hover:bg-brand-soft"><Plus :size="17" class="text-brand" />新建话题 <span class="ml-auto text-xs text-muted">⌘ N</span></button>
+                <button @click="activeView = 'search'; showCommand = false" class="flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left text-sm hover:bg-brand-soft"><Search :size="17" class="text-brand" />搜索对话</button>
+                <button @click="activeView = 'settings'; showCommand = false" class="flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left text-sm hover:bg-brand-soft"><Settings :size="17" class="text-brand" />打开设置</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- New topic dialog -->
+          <div v-if="showNewTopic" class="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/30 px-4">
+            <div class="w-full max-w-[420px] rounded-2xl bg-white p-6 shadow-dialog">
+              <div class="flex items-center justify-between">
+                <h2 class="font-semibold">新建话题</h2>
+                <button @click="showNewTopic = false" title="关闭" aria-label="关闭"><X :size="18" class="text-muted" /></button>
+              </div>
+              <input v-model="newTopicName" @keydown.enter="createTopic" autofocus placeholder="例如：产品发布计划" class="mt-5 h-11 w-full rounded-lg border border-line px-3 text-sm outline-none focus:border-brand" />
+              <div class="mt-5 flex justify-end gap-2">
+                <button @click="showNewTopic = false" class="rounded-lg px-4 py-2 text-sm text-muted hover:bg-slate-50">取消</button>
+                <button @click="createTopic" class="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white">创建话题</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- New assistant dialog -->
+          <div v-if="showNewAssistant" class="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/30 px-4">
+            <div class="w-full max-w-[420px] rounded-2xl bg-white p-6 shadow-dialog">
+              <div class="flex items-center justify-between">
+                <h2 class="font-semibold">新建助手</h2>
+                <button @click="showNewAssistant = false" title="关闭" aria-label="关闭"><X :size="18" class="text-muted" /></button>
+              </div>
+              <input v-model="newAssistantName" @keydown.enter="createAssistant" autofocus placeholder="例如：研究助手" class="mt-5 h-11 w-full rounded-lg border border-line px-3 text-sm outline-none focus:border-brand" />
+              <div class="mt-5 flex justify-end gap-2">
+                <button @click="showNewAssistant = false" class="rounded-lg px-4 py-2 text-sm text-muted hover:bg-slate-50">取消</button>
+                <button @click="createAssistant" class="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white">创建助手</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Delete dialog -->
+          <div v-if="showDeleteDialog" class="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/30 px-4">
+            <div class="w-full max-w-[420px] rounded-2xl bg-white p-6 shadow-dialog">
+              <div class="flex h-11 w-11 items-center justify-center rounded-xl bg-red-50 text-danger"><CircleAlert :size="22" /></div>
+              <h2 class="mt-4 font-semibold">删除这个话题？</h2>
+              <p class="mt-2 text-sm leading-6 text-muted">话题中的消息将从本地 IndexedDB 中删除。此操作不可撤销。</p>
+              <div class="mt-6 flex justify-end gap-2">
+                <button @click="showDeleteDialog = false" class="rounded-lg px-4 py-2 text-sm text-muted hover:bg-slate-50">取消</button>
+                <button @click="deleteTopic" class="rounded-lg bg-danger px-4 py-2 text-sm font-medium text-white">确认删除</button>
+              </div>
+            </div>
+          </div>
+
+          <div v-if="toast" class="fixed bottom-5 left-1/2 z-[100] flex -translate-x-1/2 items-center gap-2 rounded-xl bg-slate-900 px-4 py-3 text-sm text-white shadow-panel">
+            <CheckCircle2 :size="16" class="text-emerald-300" />{{ toast }}
+          </div>
+        </div>
+      `
+    })
+
+    app.component('OrbitIcon', {
+      props: { size: { type: Number, default: 19 } },
+      template: `
+        <svg :width="size" :height="size" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="3"></circle>
+          <ellipse cx="12" cy="12" rx="10" ry="4.5" transform="rotate(-28 12 12)"></ellipse>
+          <circle cx="20.5" cy="7.5" r="1.4" fill="currentColor" stroke="none"></circle>
+        </svg>
+      `
+    })
+
+    app.component('Toggle', {
+      props: { checked: Boolean },
+      template: `
+        <button
+          :class="checked ? 'bg-brand' : 'bg-slate-200'"
+          class="relative h-6 w-11 rounded-full transition"
+          role="switch"
+          :aria-checked="checked"
+          title="切换"
+        >
+          <span :class="checked ? 'translate-x-6' : 'translate-x-1'" class="absolute left-0 top-1 h-4 w-4 rounded-full bg-white shadow-sm transition"></span>
+        </button>
+      `
+    })
+
+    app.component('SettingHeader', {
+      props: ['title', 'description'],
+      template: `
+        <div class="mb-7 border-b border-line pb-5">
+          <h2 class="text-xl font-semibold">{{ title }}</h2>
+          <p class="mt-1 text-sm text-muted">{{ description }}</p>
+        </div>
+      `
+    })
+
+    app.component('SettingRow', {
+      props: ['title', 'description'],
+      template: `
+        <div class="flex flex-col gap-4 border-b border-line py-5 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <div class="text-sm font-medium">{{ title }}</div>
+            <div class="mt-1 text-xs text-muted">{{ description }}</div>
+          </div>
+          <div class="shrink-0"><slot /></div>
+        </div>
+      `
+    })
+
+    app.mount('#app')
+  </script>
+
+  <style>
+    :root {
+      --line: #e5e7eb;
+    }
+
+    * {
+      scrollbar-width: thin;
+      scrollbar-color: #d0d5dd transparent;
+    }
+
+    body {
+      margin: 0;
+      font-family: Inter, "PingFang SC", "Microsoft YaHei", sans-serif;
+      color: #172033;
+    }
+
+    .dark {
+      filter: invert(.92) hue-rotate(180deg);
+    }
+
+    .dark img,
+    .dark video,
+    .dark iframe {
+      filter: invert(1) hue-rotate(180deg);
+    }
+
+    mark {
+      color: inherit;
+    }
+
+    textarea {
+      min-height: 64px;
+    }
+
+    @media (max-width: 767px) {
+      main {
+        padding-bottom: 58px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div id="app"></div>
+</body>
+</html>
