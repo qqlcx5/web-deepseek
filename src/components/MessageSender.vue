@@ -38,7 +38,8 @@ const triggerConfig = [
   },
 ]
 
-function onSubmit(value: string) {
+function onSubmit() {
+  const value = inputValue.value
   if (!value?.trim() || loading.value) return
   emit('send', value.trim())
   inputValue.value = ''

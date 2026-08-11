@@ -264,6 +264,8 @@ window.addEventListener('resize', () => { isMobile.value = window.innerWidth <= 
         </div>
         <div class="header-actions">
           <button v-if="generating" class="stop-btn-header" @click="stopGeneration"><i class="i-tabler-square text-xs fill-current" />停止</button>
+          <button class="icon-btn" title="导入 Cherry JSON" @click="importDialogVisible = true"><i class="i-tabler-upload text-sm" /></button>
+          <button class="icon-btn" title="导出 Cherry JSON" @click="exportDialogVisible = true"><i class="i-tabler-download text-sm" /></button>
           <button class="icon-btn" title="检查器" @click="inspectorOpen = !inspectorOpen"><i class="i-tabler-layout-sidebar-right-collapse text-sm" /></button>
           <RouterLink to="/settings" class="icon-btn" title="设置"><i class="i-tabler-settings text-sm" /></RouterLink>
         </div>
