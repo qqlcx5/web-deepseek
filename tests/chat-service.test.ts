@@ -49,14 +49,18 @@ const MODEL: Model = {
   tags: [],
 }
 
+/**
+ * Build StreamDeps with a real message object and an onDelta that applies
+ * mutations directly to it — simulating what the store does on the proxy.
+ */
 function makeDeps(message: ChatMessage, overrides: Partial<StreamDeps> = {}): StreamDeps {
   return {
-    assistantMessage: message,
     context: [],
     model: MODEL,
     provider: undefined,
     signal: new AbortController().signal,
     topicId: 't1',
+    onDelta: (mutator) => { mutator(message) },
     onPersist: vi.fn(),
     onErrorToast: vi.fn(),
     ...overrides,

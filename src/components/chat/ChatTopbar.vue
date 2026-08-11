@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, nextTick } from 'vue'
+import { ref, nextTick, computed } from 'vue'
 import { useChatStore } from '@/stores/chat'
 import { useTheme } from '@/composables/useTheme'
 import { useAppStore } from '@/stores/app'
@@ -14,6 +14,33 @@ const { isDark, setTheme } = useTheme()
 const renaming = ref(false)
 const renameInput = ref<HTMLInputElement | null>(null)
 const renameValue = ref('')
+
+// ─── Context Banner State ───
+const currentAssistantName = computed(() => {
+  const assistantId = store.currentChat?.assistantId ?? appStore.defaultAssistant?.id
+  const assistant = appStore.assistants.find(a => a.id === assistantId) ?? appStore.defaultAssistant
+  return assistant?.name ?? '默认助手'
+})
+
+const currentModelName = computed(() => {
+  return uiStore.selectedModel?.name ?? '未选择模型'
+})
+
+type ProviderStatus = 'ready' | 'no-key' | 'no-model'
+
+const providerStatus = computed<{ status: ProviderStatus; label: string }>(() => {
+  if (!uiStore.selectedModel) {
+    return { status: 'no-model', label: '未配置模型' }
+  }
+  const provider = appStore.providers.find(p => p.id === uiStore.selectedModel!.providerId)
+  if (!provider || !provider.enabled) {
+    return { status: 'no-model', label: 'Provider 未启用' }
+  }
+  if (!provider.apiKey) {
+    return { status: 'no-key', label: '缺少 API Key' }
+  }
+  return { status: 'ready', label: '已就绪' }
+})
 
 function startRename() {
   if (!store.currentChat) return
@@ -137,6 +164,20 @@ function toggleAppTheme() {
     </button>
   </header>
 
+  <div class="context-banner">
+    <span class="context-item">{{ currentAssistantName }}</span>
+    <span class="context-sep">·</span>
+    <span class="context-item">{{ currentModelName }}</span>
+    <span class="context-sep">·</span>
+    <span class="context-status" :class="providerStatus.status">
+      <Icon
+        :icon="providerStatus.status === 'ready' ? 'tabler:circle-check' : providerStatus.status === 'no-key' ? 'tabler:alert-triangle' : 'tabler:circle-x'"
+        width="11"
+      />
+      {{ providerStatus.label }}
+    </span>
+  </div>
+
   <div v-if="!uiStore.online" class="network-banner">
     <Icon icon="tabler:wifi-off" />
     网络已断开。消息将保存在本地，恢复连接后自动发送。
@@ -172,6 +213,46 @@ function toggleAppTheme() {
 }
 .model-button :deep(svg) { width: 14px; height: 14px; }
 .model-button span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.context-banner {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 16px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+  font-size: 10px;
+  color: var(--faint);
+  line-height: 1.6;
+}
+.context-banner .context-item {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.context-banner .context-sep {
+  color: var(--line-strong);
+  flex-shrink: 0;
+}
+.context-banner .context-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  flex-shrink: 0;
+}
+.context-banner .context-status :deep(svg) {
+  width: 11px;
+  height: 11px;
+}
+.context-banner .context-status.ready {
+  color: var(--success);
+}
+.context-banner .context-status.no-key {
+  color: var(--warning);
+}
+.context-banner .context-status.no-model {
+  color: var(--danger);
+}
+
 .network-banner {
   display: flex; min-height: 34px; align-items: center; justify-content: center;
   gap: 7px; padding: 6px 14px; color: var(--warning); background: color-mix(in srgb, var(--warning) 8%, var(--surface));

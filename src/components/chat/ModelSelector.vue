@@ -44,6 +44,8 @@ const modelGroups = computed(() => {
 
 function selectModel(model: { id: string; providerId: string; name: string; contextLength?: number; description?: string }) {
   uiStore.selectModelById(model.id, model.providerId)
+  // Override the default toast with a more informative message
+  uiStore.showToast(`已切换到 ${model.name}，仅对新消息生效`)
 }
 </script>
 

@@ -146,7 +146,7 @@ export const useChatStore = defineStore('chat', () => {
     return fallback
   }
 
-  async function streamChat(assistantMessage: ChatMessage, context = messages.value) {
+  async function streamChat(proxyMessage: ChatMessage, context = messages.value) {
     generating.value = true
     abortController.value = new AbortController()
 
@@ -154,12 +154,12 @@ export const useChatStore = defineStore('chat', () => {
       const model = getActiveModel()
       const provider = appStore.providers.find(candidate => candidate.id === model.providerId)
       await streamAssistantMessage({
-        assistantMessage,
         context,
         model,
         provider,
         signal: abortController.value.signal,
         topicId: activeChatId.value ?? undefined,
+        onDelta: (mutator) => { mutator(proxyMessage) },
         onPersist: (topicId, message) => appStore.updateMessage(topicId, message),
         onErrorToast: message => uiStore.showToast(message),
       })
@@ -167,7 +167,7 @@ export const useChatStore = defineStore('chat', () => {
     finally {
       generating.value = false
       abortController.value = null
-      if (activeChatId.value) appStore.updateMessage(activeChatId.value, assistantMessage)
+      if (activeChatId.value) appStore.updateMessage(activeChatId.value, proxyMessage)
     }
   }
 
@@ -187,6 +187,7 @@ export const useChatStore = defineStore('chat', () => {
       createdAt,
       status: 'complete',
       parentBranchId: replyingToMsgId.value ?? undefined,
+      attachments: attachments.value.length > 0 ? [...attachments.value] : undefined,
       blocks: [{
         id: createId('block'),
         type: 'main_text',
@@ -214,7 +215,11 @@ export const useChatStore = defineStore('chat', () => {
     replyingTo.value = ''
     replyingToMsgId.value = null
 
-    await streamChat(assistantMessage)
+    // Retrieve the reactive proxy reference from the ref array so that
+    // mutations inside streamAssistantMessage (via onDelta) trigger Vue
+    // reactivity and the UI updates character-by-character.
+    const proxyMessage = messages.value[messages.value.length - 1]!
+    await streamChat(proxyMessage)
 
     const topic = appStore.topicById(topicId)
     if (topic && appStore.settings.enableTopicNaming && !topic.isNameManuallyEdited && topic.messages.length <= 2) {
@@ -243,15 +248,19 @@ export const useChatStore = defineStore('chat', () => {
     if (message.role !== 'assistant' || !activeChatId.value || generating.value) return
     const index = messages.value.findIndex(candidate => candidate.id === message.id)
     if (index < 1) return
-    message.branches = (message.branches ?? 1) + 1
-    message.activeBranch = message.branches
-    message.content = ''
-    message.reasoningContent = undefined
-    message.error = undefined
-    message.blocks = []
-    message.status = 'sending'
-    message.loading = true
-    await streamChat(message, messages.value.slice(0, index))
+    // Get the reactive proxy from the messages array — `message` may be a
+    // raw (non-proxy) object passed from a component, so we must operate
+    // on the proxy to keep Vue reativity intact.
+    const proxyMessage = messages.value[index]!
+    proxyMessage.branches = (proxyMessage.branches ?? 1) + 1
+    proxyMessage.activeBranch = proxyMessage.branches
+    proxyMessage.content = ''
+    proxyMessage.reasoningContent = undefined
+    proxyMessage.error = undefined
+    proxyMessage.blocks = []
+    proxyMessage.status = 'sending'
+    proxyMessage.loading = true
+    await streamChat(proxyMessage, messages.value.slice(0, index))
   }
 
   function branchFrom(message: ChatMessage) {

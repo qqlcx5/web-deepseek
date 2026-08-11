@@ -1,12 +1,14 @@
 <script setup lang="ts">
-import { ref, watch, nextTick, computed } from 'vue'
+import { ref, watch, nextTick, computed, h } from 'vue'
 import { useChatStore } from '@/stores/chat'
 import { useAppStore } from '@/stores/app'
 import { useUiStore } from '@/stores/ui'
 import { Icon } from '@iconify/vue'
 import { MarkdownRenderer } from 'x-markdown-vue'
-import { Thinking } from 'vue-element-plus-x'
+import { Thinking, BubbleList } from 'vue-element-plus-x'
+import type { PromptsItemsProps } from 'vue-element-plus-x/types/components/Prompts/types'
 import { useTheme } from '@/composables/useTheme'
+import WelcomeScreen from './WelcomeScreen.vue'
 import 'x-markdown-vue/style'
 import type { ChatMessage, MessageBlock } from '@/types'
 
@@ -14,7 +16,7 @@ const store = useChatStore()
 const appStore = useAppStore()
 const uiStore = useUiStore()
 const { isDark } = useTheme()
-const messageScroller = ref<HTMLElement | null>(null)
+const bubbleListRef = ref<InstanceType<typeof BubbleList> | null>(null)
 const codeViewer = ref<{ language: string; code: string } | null>(null)
 
 const mermaidConfig = {
@@ -77,6 +79,77 @@ const messageClass = computed(() => ({
   'code-line-numbers': codeShowLineNumbers.value,
 }))
 
+// ─── BubbleList items: pure computed mapping from store.messages ───
+// Each item is a plain object that BubbleList passes back via slot { item }
+interface BubbleItem {
+  key: string
+  placement: 'start' | 'end'
+  loading: boolean
+  message: ChatMessage
+}
+
+const bubbleItems = computed<BubbleItem[]>(() =>
+  store.messages.map((message) => ({
+    key: message.id,
+    placement: message.role === 'user' ? 'end' : 'start',
+    loading: !!message.loading,
+    message,
+  })),
+)
+
+// ─── Welcome screen dynamic content ───
+const welcomeIcon = computed(() => {
+  const assistantId = store.currentChat?.assistantId ?? store.activeAssistantId
+  const assistant = appStore.assistants.find(a => a.id === assistantId) ?? appStore.defaultAssistant
+  return assistant?.emoji || 'tabler:sparkles'
+})
+
+const welcomeTitle = computed(() => {
+  const assistantId = store.currentChat?.assistantId ?? store.activeAssistantId
+  const assistant = appStore.assistants.find(a => a.id === assistantId) ?? appStore.defaultAssistant
+  return assistant ? `与 ${assistant.name} 对话` : '开始新对话'
+})
+
+const welcomeDescription = computed(() => {
+  const assistantId = store.currentChat?.assistantId ?? store.activeAssistantId
+  const assistant = appStore.assistants.find(a => a.id === assistantId) ?? appStore.defaultAssistant
+  return assistant?.description || '输入消息或粘贴文件，AI 将为你解答'
+})
+
+// ─── Preset prompts for empty state ───
+const promptItems = computed<PromptsItemsProps[]>(() => [
+  {
+    key: 'code',
+    label: '写一段代码',
+    description: '让 AI 帮你编写 Python、JavaScript、Go 等语言的脚本',
+    icon: h(Icon, { icon: 'tabler:code' }),
+  },
+  {
+    key: 'explain',
+    label: '解释概念',
+    description: '深入浅出地解释技术名词或复杂概念',
+    icon: h(Icon, { icon: 'tabler:bulb' }),
+  },
+  {
+    key: 'summarize',
+    label: '总结内容',
+    description: '将长文本浓缩为要点摘要',
+    icon: h(Icon, { icon: 'tabler:notes' }),
+  },
+  {
+    key: 'translate',
+    label: '翻译文字',
+    description: '在中文、英文、日文等多种语言间互译',
+    icon: h(Icon, { icon: 'tabler:language' }),
+  },
+])
+
+function handlePromptClick(item: PromptsItemsProps) {
+  if (!item.label) return
+  store.draft = item.label
+  store.sendMessage()
+}
+
 // ─── Block helpers ───
 function getBlocks(message: ChatMessage): MessageBlock[] | null {
   const blocks = message.blocks
@@ -91,6 +164,7 @@ function hasUsage(message: ChatMessage): boolean {
 function getUsage(message: ChatMessage) {
   return message.usage
 }
+
 function closeCodeViewer() {
   codeViewer.value = null
 }
@@ -105,26 +179,23 @@ async function copyCodeViewer() {
   }
 }
 
-function handleScroll() {
-  if (!messageScroller.value) return
-  const el = messageScroller.value
-  const dist = el.scrollHeight - el.scrollTop - el.clientHeight
-  uiStore.nearBottom = dist < 100
+// ─── Scroll handling delegated to BubbleList ───
+function scrollToBottom(smooth = false) {
+  bubbleListRef.value?.scrollToBottom(smooth)
+  uiStore.nearBottom = true
 }
 
-function scrollToBottom() {
-  nextTick(() => {
-    if (!messageScroller.value) return
-    messageScroller.value.scrollTop = messageScroller.value.scrollHeight
-    uiStore.nearBottom = true
-  })
+function onScrollStateChange(state: 'AT_BOTTOM' | 'SCROLLED_UP' | 'HAS_NEW_MESSAGES') {
+  uiStore.nearBottom = state === 'AT_BOTTOM'
 }
 
-// Scroll to bottom when messages change or generating
+// Watch messages length for auto-follow during generation
 watch(
   () => store.messages.length,
   () => {
-    if (uiStore.nearBottom || store.generating) scrollToBottom()
+    if (uiStore.nearBottom || store.generating) {
+      nextTick(() => scrollToBottom())
+    }
   },
 )
 
@@ -132,15 +203,15 @@ watch(
 watch(
   () => store.messages.map(m => m.content).join(''),
   () => {
-    if (uiStore.nearBottom) scrollToBottom()
+    if (uiStore.nearBottom) nextTick(() => scrollToBottom())
   },
 )
 
-// Also watch reasoning content updates
+// Watch reasoning content updates
 watch(
   () => store.messages.map(m => m.reasoningContent ?? '').join(''),
   () => {
-    if (uiStore.nearBottom) scrollToBottom()
+    if (uiStore.nearBottom) nextTick(() => scrollToBottom())
   },
 )
 
@@ -150,214 +221,254 @@ defineExpose({ scrollToBottom })
 </script>
 
 <template>
-  <section class="chat-area">
-    <div ref="messageScroller" class="messages scroll" @scroll="handleScroll">
-      <div class="message-list">
-        <div v-if="store.messages.length === 0" class="empty-state">
-          <span class="empty-icon"><Icon icon="tabler:sparkles" /></span>
-          <strong class="empty-title">开始新对话</strong>
-          <span class="empty-hint">输入消息或粘贴文件，AI 将为你解答</span>
-        </div>
+  <section class="chat-area" :class="messageClass">
+    <!-- Empty state: Welcome + Prompts -->
+    <WelcomeScreen
+      v-if="store.messages.length === 0"
+      :icon="welcomeIcon"
+      :title="welcomeTitle"
+      :description="welcomeDescription"
+      :prompts="promptItems"
+      @item-click="handlePromptClick"
+    />
 
-        <div v-else class="date-divider">今天</div>
+    <!-- BubbleList -->
+    <BubbleList
+      v-else
+      ref="bubbleListRef"
+      :list="bubbleItems"
+      :auto-scroll="true"
+      :virtual="false"
+      item-key="key"
+      :show-back-button="true"
+      :back-button-threshold="80"
+      @scroll-state-change="onScrollStateChange"
+    >
+      <!-- ─── Header slot: model name / time / status ─── -->
+      <template #header="{ item }">
+        <template v-if="item.message.role === 'assistant'">
+          <div class="message-meta">
+            <span class="message-author">Assistant</span>
+            <span v-if="item.message.model" class="message-model">{{ item.message.model }}</span>
+            <span class="message-time">{{ new Date(item.message.createdAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) }}</span>
+          </div>
+        </template>
+        <template v-else>
+          <div class="user-meta">
+            <span class="message-time">{{ new Date(item.message.createdAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) }}</span>
+          </div>
+        </template>
+      </template>
 
-        <article
-          v-for="message in store.messages"
-          :key="message.id"
-          class="message"
-          :class="[message.role, messageClass]"
-        >
-          <!-- Assistant message -->
-          <template v-if="message.role === 'assistant'">
-            <div class="assistant-avatar">
-              <Icon icon="tabler:sparkles" />
-            </div>
-            <div class="message-content">
-              <div class="message-meta">
-                <span class="message-author">Assistant</span>
-                <span v-if="message.model" class="message-model">{{ message.model }}</span>
-                <span class="message-time">{{ new Date(message.createdAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) }}</span>
-              </div>
+      <!-- ─── Avatar slot ─── -->
+      <template #avatar="{ item }">
+        <template v-if="item.message.role === 'assistant'">
+          <div class="assistant-avatar">
+            <Icon icon="tabler:sparkles" />
+          </div>
+        </template>
+        <template v-else>
+          <div class="avatar">我</div>
+        </template>
+      </template>
 
-              <!-- Block-based rendering (if blocks exist) -->
-              <template v-if="getBlocks(message)">
-                <template v-for="(block, blockIdx) in getBlocks(message)" :key="block.id || blockIdx">
-                  <!-- Thinking block -->
-                  <Thinking
-                    v-if="block.type === 'thinking'"
-                    :content="block.content"
-                    :status="message.loading ? 'thinking' : 'end'"
-                    :auto-collapse="true"
-                  />
+      <!-- ─── Content slot: blocks rendering ─── -->
+      <template #content="{ item }">
+        <!-- Assistant content -->
+        <template v-if="item.message.role === 'assistant'">
+          <!-- Block-based rendering (if blocks exist) -->
+          <template v-if="getBlocks(item.message)">
+            <template v-for="(block, blockIdx) in getBlocks(item.message)" :key="block.id || blockIdx">
+              <!-- Thinking block -->
+              <Thinking
+                v-if="block.type === 'thinking'"
+                :content="block.content"
+                :status="item.message.loading ? 'thinking' : 'end'"
+                :auto-collapse="true"
+              />
 
-                  <!-- Main text block -->
-                  <div v-else-if="block.type === 'main_text'" class="markdown" :style="{ fontSize }">
-                    <div v-if="message.loading && !block.content" class="typing">
-                      <i /><i /><i />
-                    </div>
-                    <MarkdownRenderer v-if="block.content" :markdown="block.content" v-bind="markdownRendererOptions" />
-                  </div>
-
-                  <!-- Error block -->
-                  <div v-else-if="block.type === 'error'" class="message-error">
-                    <Icon icon="tabler:alert-circle" width="14" />
-                    {{ block.content }}
-                  </div>
-
-                  <!-- Citation block -->
-                  <div v-else-if="block.type === 'citation'" class="citation-block">
-                    <div class="citation-title">
-                      <Icon icon="tabler:quote" width="14" />
-                      引用
-                    </div>
-                    <div class="citation-content">{{ block.content }}</div>
-                  </div>
-
-                  <!-- Tool block -->
-                  <div v-else-if="block.type === 'tool'" class="tool-block">
-                    <div class="tool-title">
-                      <Icon icon="tabler:tool" width="14" />
-                      工具调用
-                    </div>
-                    <pre class="tool-content">{{ block.content }}</pre>
-                  </div>
-                </template>
-              </template>
-
-              <!-- Fallback: legacy rendering (no blocks) -->
-              <template v-else>
-                <!-- Reasoning content (Thinking component) -->
-                <Thinking
-                  v-if="message.reasoningContent"
-                  :content="message.reasoningContent"
-                  :status="message.loading ? 'thinking' : 'end'"
-                  :auto-collapse="true"
-                />
-
-                <div v-if="message.loading && !message.content" class="typing">
+              <!-- Main text block -->
+              <div v-else-if="block.type === 'main_text'" class="markdown" :style="{ fontSize }">
+                <div v-if="item.message.loading && !block.content" class="typing">
                   <i /><i /><i />
                 </div>
+                <MarkdownRenderer v-if="block.content" :markdown="block.content" v-bind="markdownRendererOptions" />
+              </div>
 
-                <div v-if="message.content" class="markdown" :style="{ fontSize }">
-                  <MarkdownRenderer :markdown="message.content" v-bind="markdownRendererOptions" />
-                </div>
-              </template>
-
-              <!-- Error indicator (legacy, for messages without error block) -->
-              <div v-if="message.error && !getBlocks(message)?.some(b => b.type === 'error')" class="message-error">
+              <!-- Error block -->
+              <div v-else-if="block.type === 'error'" class="message-error">
                 <Icon icon="tabler:alert-circle" width="14" />
-                {{ message.error }}
+                {{ block.content }}
               </div>
 
-              <!-- Usage info -->
-              <div v-if="hasUsage(message) && !message.loading" class="message-usage">
-                <Icon icon="tabler:chart-bar" width="12" />
-                <span>输入 {{ getUsage(message)?.prompt_tokens ?? '?' }}</span>
-                <span class="usage-sep">/</span>
-                <span>输出 {{ getUsage(message)?.completion_tokens ?? '?' }}</span>
-                <span class="usage-sep">/</span>
-                <span>总计 {{ getUsage(message)?.total_tokens ?? '?' }} tokens</span>
-              </div>
-
-              <!-- Sources -->
-              <div v-if="message.sources?.length" class="sources">
-                <div class="sources-title">
-                  <Icon icon="tabler:books" width="14" />
-                  引用来源
+              <!-- Citation block -->
+              <div v-else-if="block.type === 'citation'" class="citation-block">
+                <div class="citation-title">
+                  <Icon icon="tabler:quote" width="14" />
+                  引用
                 </div>
-                <div class="source-list">
-                  <a
-                    v-for="(source, idx) in message.sources"
-                    :key="source.name"
-                    class="source"
-                    :href="source.url"
-                    target="_blank"
-                  >
-                    <span class="source-index">{{ idx + 1 }}</span>
-                    <span class="source-copy">
-                      <span class="source-name">{{ source.name }}</span>
-                      <span class="source-domain">{{ source.domain }}</span>
-                    </span>
-                  </a>
-                </div>
+                <div class="citation-content">{{ block.content }}</div>
               </div>
 
-              <!-- Artifact -->
-              <div v-if="message.artifact" class="artifact">
-                <span class="artifact-icon">
-                  <Icon icon="tabler:file-code-2" width="16" />
-                </span>
-                <span class="artifact-copy">
-                  <span class="artifact-name">{{ message.artifact.name }}</span>
-                  <span class="artifact-meta">{{ message.artifact.meta }}</span>
-                </span>
-                <button class="secondary" @click="uiStore.showToast('已在右侧打开产物预览')">
-                  <Icon icon="tabler:layout-sidebar-right-expand" width="13" />
-                  打开
-                </button>
-              </div>
-
-              <!-- Message tools -->
-              <div v-if="!message.loading" class="message-tools">
-                <button class="message-tool tooltip" data-tip="复制" @click="store.copyMessage(message)">
-                  <Icon icon="tabler:copy" />
-                </button>
-                <button
-                  class="message-tool tooltip"
-                  data-tip="有帮助"
-                  :class="{ active: message.rating === 'up' }"
-                  @click="store.rateMessage(message, 'up')"
-                >
-                  <Icon icon="tabler:thumb-up" />
-                </button>
-                <button
-                  class="message-tool tooltip"
-                  data-tip="没有帮助"
-                  :class="{ active: message.rating === 'down' }"
-                  @click="store.rateMessage(message, 'down')"
-                >
-                  <Icon icon="tabler:thumb-down" />
-                </button>
-                <button class="message-tool tooltip" data-tip="重新生成" @click="store.regenerate(message)">
-                  <Icon icon="tabler:rotate-clockwise" />
-                </button>
-                <button class="message-tool tooltip" data-tip="从这里分支" @click="store.branchFrom(message)">
-                  <Icon icon="tabler:git-branch" />
-                </button>
-                <div v-if="(message.branches ?? 0) > 1" class="branch-switcher">
-                  <button><Icon icon="tabler:chevron-left" /></button>
-                  {{ message.activeBranch }}/{{ message.branches }}
-                  <button><Icon icon="tabler:chevron-right" /></button>
+              <!-- Tool block -->
+              <div v-else-if="block.type === 'tool'" class="tool-block">
+                <div class="tool-title">
+                  <Icon icon="tabler:tool" width="14" />
+                  工具调用
                 </div>
+                <pre class="tool-content">{{ block.content }}</pre>
               </div>
-            </div>
+            </template>
           </template>
 
-          <!-- User message -->
+          <!-- Fallback: legacy rendering (no blocks) -->
           <template v-else>
-            <div class="message-content">
-              <div class="user-bubble">{{ message.content }}</div>
-              <div class="user-time">{{ new Date(message.createdAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) }}</div>
-              <div class="message-tools" style="justify-content:flex-end">
-                <button class="message-tool tooltip" data-tip="编辑并重新发送" @click="store.editMessage(message)">
-                  <Icon icon="tabler:pencil" />
-                </button>
-                <button class="message-tool tooltip" data-tip="复制" @click="store.copyMessage(message)">
-                  <Icon icon="tabler:copy" />
-                </button>
-              </div>
+            <Thinking
+              v-if="item.message.reasoningContent"
+              :content="item.message.reasoningContent"
+              :status="item.message.loading ? 'thinking' : 'end'"
+              :auto-collapse="true"
+            />
+
+            <div v-if="item.message.loading && !item.message.content" class="typing">
+              <i /><i /><i />
             </div>
-            <div class="avatar">我</div>
+
+            <div v-if="item.message.content" class="markdown" :style="{ fontSize }">
+              <MarkdownRenderer :markdown="item.message.content" v-bind="markdownRendererOptions" />
+            </div>
           </template>
-        </article>
-      </div>
-    </div>
 
-    <button v-if="!uiStore.nearBottom && store.messages.length > 0" class="jump-bottom" @click="scrollToBottom">
-      <Icon icon="tabler:arrow-down" />
-      回到底部
-    </button>
+          <!-- Error indicator (legacy, for messages without error block) -->
+          <div v-if="item.message.error && !getBlocks(item.message)?.some(b => b.type === 'error')" class="message-error">
+            <Icon icon="tabler:alert-circle" width="14" />
+            {{ item.message.error }}
+          </div>
 
+          <!-- Sources -->
+          <div v-if="item.message.sources?.length" class="sources">
+            <div class="sources-title">
+              <Icon icon="tabler:books" width="14" />
+              引用来源
+            </div>
+            <div class="source-list">
+              <a
+                v-for="(source, idx) in item.message.sources"
+                :key="source.name"
+                class="source"
+                :href="source.url"
+                target="_blank"
+              >
+                <span class="source-index">{{ idx + 1 }}</span>
+                <span class="source-copy">
+                  <span class="source-name">{{ source.name }}</span>
+                  <span class="source-domain">{{ source.domain }}</span>
+                </span>
+              </a>
+            </div>
+          </div>
+
+          <!-- Artifact -->
+          <div v-if="item.message.artifact" class="artifact">
+            <span class="artifact-icon">
+              <Icon icon="tabler:file-code-2" width="16" />
+            </span>
+            <span class="artifact-copy">
+              <span class="artifact-name">{{ item.message.artifact.name }}</span>
+              <span class="artifact-meta">{{ item.message.artifact.meta }}</span>
+            </span>
+            <button class="secondary" @click="uiStore.showToast('已在右侧打开产物预览')">
+              <Icon icon="tabler:layout-sidebar-right-expand" width="13" />
+              打开
+            </button>
+          </div>
+        </template>
+
+        <!-- User content -->
+        <template v-else>
+          <div class="user-bubble">{{ item.message.content }}</div>
+        </template>
+      </template>
+
+      <!-- ─── Footer slot: tools + usage ─── -->
+      <template #footer="{ item }">
+        <!-- Assistant footer -->
+        <template v-if="item.message.role === 'assistant'">
+          <!-- Usage info -->
+          <div v-if="hasUsage(item.message) && !item.message.loading" class="message-usage">
+            <Icon icon="tabler:chart-bar" width="12" />
+            <span>输入 {{ getUsage(item.message)?.prompt_tokens ?? '?' }}</span>
+            <span class="usage-sep">/</span>
+            <span>输出 {{ getUsage(item.message)?.completion_tokens ?? '?' }}</span>
+            <span class="usage-sep">/</span>
+            <span>总计 {{ getUsage(item.message)?.total_tokens ?? '?' }} tokens</span>
+          </div>
+
+          <!-- Message tools -->
+          <div v-if="!item.message.loading" class="message-tools">
+            <button class="message-tool tooltip" data-tip="复制" @click="store.copyMessage(item.message)">
+              <Icon icon="tabler:copy" />
+            </button>
+            <button
+              class="message-tool tooltip"
+              data-tip="有帮助"
+              :class="{ active: item.message.rating === 'up' }"
+              @click="store.rateMessage(item.message, 'up')"
+            >
+              <Icon icon="tabler:thumb-up" />
+            </button>
+            <button
+              class="message-tool tooltip"
+              data-tip="没有帮助"
+              :class="{ active: item.message.rating === 'down' }"
+              @click="store.rateMessage(item.message, 'down')"
+            >
+              <Icon icon="tabler:thumb-down" />
+            </button>
+            <button class="message-tool tooltip" data-tip="重新生成" @click="store.regenerate(item.message)">
+              <Icon icon="tabler:rotate-clockwise" />
+            </button>
+            <button class="message-tool tooltip" data-tip="从这里分支" @click="store.branchFrom(item.message)">
+              <Icon icon="tabler:git-branch" />
+            </button>
+            <div v-if="(item.message.branches ?? 0) > 1" class="branch-switcher">
+              <button><Icon icon="tabler:chevron-left" /></button>
+              {{ item.message.activeBranch }}/{{ item.message.branches }}
+              <button><Icon icon="tabler:chevron-right" /></button>
+            </div>
+          </div>
+        </template>
+
+        <!-- User footer -->
+        <template v-else>
+          <div class="message-tools" style="justify-content:flex-end">
+            <button class="message-tool tooltip" data-tip="编辑并重新发送" @click="store.editMessage(item.message)">
+              <Icon icon="tabler:pencil" />
+            </button>
+            <button class="message-tool tooltip" data-tip="复制" @click="store.copyMessage(item.message)">
+              <Icon icon="tabler:copy" />
+            </button>
+          </div>
+        </template>
+      </template>
+
+      <!-- ─── Loading slot ─── -->
+      <template #loading="{ item }">
+        <div v-if="item.message.role === 'assistant' && item.message.loading" class="typing">
+          <i /><i /><i />
+        </div>
+      </template>
+
+      <!-- ─── Custom back-to-bottom button ─── -->
+      <template #backToBottom>
+        <button class="jump-bottom">
+          <Icon icon="tabler:arrow-down" />
+          回到底部
+        </button>
+      </template>
+    </BubbleList>
+
+    <!-- Code Viewer Drawer (Teleport) -->
     <Teleport to="body">
       <div v-if="codeViewer" class="code-viewer-backdrop" @click.self="closeCodeViewer">
         <aside
@@ -388,50 +499,94 @@ defineExpose({ scrollToBottom })
 
 <style scoped>
 .chat-area { position: relative; min-height: 0; flex: 1; }
-.messages { position: absolute; inset: 0; overflow-y: auto; overscroll-behavior: contain; }
-.message-list { width: min(100%, 820px); margin: 0 auto; padding: 32px 24px 120px; }
 
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  padding: 80px 24px;
-  color: var(--faint);
+/* ─── BubbleList wrapper ─── */
+.chat-area :deep(.elx-bubble-list) {
+  width: min(100%, 820px);
+  margin: 0 auto;
+  padding: 32px 24px 120px;
 }
-.empty-icon { color: var(--line-strong); }
-.empty-title { font-size: 16px; font-weight: 600; color: var(--muted); }
-.empty-hint { font-size: 12px; }
 
+/* ─── Date divider ─── */
 .date-divider { display: flex; align-items: center; gap: 12px; margin: 4px 0 28px; color: var(--faint); font-size: 10px; }
 .date-divider::before, .date-divider::after { height: 1px; flex: 1; background: var(--line); content: ""; }
-.message { display: grid; grid-template-columns: 30px minmax(0, 1fr); gap: 11px; margin-bottom: 28px; }
-.message.user { grid-template-columns: minmax(0, 1fr) 30px; }
-.assistant-avatar { display: flex; width: 30px; height: 30px; align-items: center; justify-content: center; color: var(--brand); background: var(--brand-soft); border: 1px solid var(--line-strong); border-radius: 7px; }
+
+/* ─── Avatars ─── */
+.assistant-avatar {
+  display: flex;
+  width: 30px;
+  height: 30px;
+  align-items: center;
+  justify-content: center;
+  color: var(--brand);
+  background: var(--brand-soft);
+  border: 1px solid var(--line-strong);
+  border-radius: 7px;
+}
 .assistant-avatar :deep(svg) { width: 15px; }
-.message-content { min-width: 0; }
-.message.user .message-content { justify-self: end; max-width: min(82%, 660px); }
+
+.avatar {
+  display: flex;
+  width: 30px;
+  height: 30px;
+  align-items: center;
+  justify-content: center;
+  color: var(--brand);
+  background: var(--brand-soft);
+  border-radius: 50%;
+  font-size: 11px;
+  font-weight: 750;
+}
+
+/* ─── Message meta ─── */
 .message-meta { display: flex; align-items: center; gap: 7px; height: 23px; margin-bottom: 3px; font-size: 11px; }
 .message-author { font-weight: 700; }
 .message-model, .message-time { color: var(--faint); font-size: 10px; }
-.user-bubble { padding: 10px 13px; color: var(--text); background: var(--brand-soft); border: 1px solid var(--line); border-radius: 8px 2px 8px 8px; font-size: 13px; line-height: 1.65; white-space: pre-wrap; }
-.user-time { margin-top: 5px; color: var(--faint); font-size: 10px; text-align: right; }
-/* ── 以下项目自定义 markdown 样式已注释，使用 x-markdown-vue 组件自带样式 ── */
-/*
-.markdown { color: var(--text-secondary); font-size: 13px; line-height: 1.75; overflow-wrap: anywhere; }
-.markdown :deep(p) { margin: 0 0 10px; }
-.markdown :deep(h2), .markdown :deep(h3) { margin: 18px 0 8px; color: var(--text); font-size: 14px; }
-.markdown :deep(ul), .markdown :deep(ol) { margin: 8px 0; padding-left: 21px; }
-.markdown :deep(li) { margin: 4px 0; }
-.markdown :deep(table) { width: 100%; margin: 12px 0; border-collapse: collapse; font-size: 12px; }
-.markdown :deep(th), .markdown :deep(td) { padding: 8px; border: 1px solid var(--line); text-align: left; }
-.markdown :deep(th) { background: var(--surface-3); }
-.markdown :deep(blockquote) { margin: 12px 0; padding: 7px 11px; color: var(--muted); background: var(--surface-2); border-left: 3px solid var(--brand); }
-.markdown :deep(code:not(pre code)) { padding: 2px 5px; color: var(--brand); background: var(--brand-soft); border-radius: 4px; font-size: 0.9em; }
-*/
-/* .markdown :deep(pre) { position: relative; overflow: auto; margin: 12px 0; padding: 35px 13px 13px; color: var(--code-text); background: var(--code-bg); border-radius: 7px; font-size: 12px; line-height: 1.6; } */
+.user-meta { display: flex; justify-content: flex-end; height: 18px; margin-bottom: 2px; }
 
+/* ─── User bubble ─── */
+.user-bubble {
+  padding: 10px 13px;
+  color: var(--text);
+  background: var(--brand-soft);
+  border: 1px solid var(--line);
+  border-radius: 8px 2px 8px 8px;
+  font-size: 13px;
+  line-height: 1.65;
+  white-space: pre-wrap;
+}
+
+/* ─── Typing indicator ─── */
+.typing { display: flex; height: 30px; align-items: center; gap: 4px; }
+.typing i { width: 5px; height: 5px; background: var(--brand); border-radius: 50%; animation: typing 1.1s infinite; }
+.typing i:nth-child(2) { animation-delay: 140ms; }
+.typing i:nth-child(3) { animation-delay: 280ms; }
+@keyframes typing { 0%,65%,100% { opacity: 0.35; transform: translateY(0); } 32% { opacity: 1; transform: translateY(-3px); } }
+
+/* ─── Message tools ─── */
+.message-tools { display: flex; min-height: 30px; align-items: center; gap: 2px; margin-top: 6px; opacity: 0; transition: opacity 140ms; }
+.chat-area :deep(.elx-bubble):hover .message-tools,
+.chat-area :deep(.elx-bubble-list__item):hover .message-tools,
+.message-tools:focus-within { opacity: 1; }
+.message-tool {
+  display: flex;
+  width: 28px;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  color: var(--faint);
+  background: transparent;
+  border-radius: 5px;
+  border: 0;
+  cursor: pointer;
+}
+.message-tool:hover, .message-tool.active { color: var(--brand); background: var(--brand-soft); }
+.message-tool :deep(svg) { width: 14px; }
+.branch-switcher { display: flex; align-items: center; gap: 3px; margin-left: 4px; color: var(--faint); font-size: 10px; }
+.branch-switcher button { display: flex; width: 24px; height: 24px; align-items: center; justify-content: center; color: inherit; background: transparent; border-radius: 4px; border: 0; cursor: pointer; }
+.branch-switcher :deep(svg) { width: 12px; }
+
+/* ─── Error ─── */
 .message-error {
   display: flex;
   align-items: center;
@@ -444,21 +599,7 @@ defineExpose({ scrollToBottom })
   font-size: 11px;
 }
 
-.typing { display: flex; height: 30px; align-items: center; gap: 4px; }
-.typing i { width: 5px; height: 5px; background: var(--brand); border-radius: 50%; animation: typing 1.1s infinite; }
-.typing i:nth-child(2) { animation-delay: 140ms; }
-.typing i:nth-child(3) { animation-delay: 280ms; }
-@keyframes typing { 0%,65%,100% { opacity: 0.35; transform: translateY(0); } 32% { opacity: 1; transform: translateY(-3px); } }
-
-.message-tools { display: flex; min-height: 30px; align-items: center; gap: 2px; margin-top: 6px; opacity: 0; transition: opacity 140ms; }
-.message:hover .message-tools, .message-tools:focus-within { opacity: 1; }
-.message-tool { display: flex; width: 28px; height: 28px; align-items: center; justify-content: center; color: var(--faint); background: transparent; border-radius: 5px; border: 0; cursor: pointer; }
-.message-tool:hover, .message-tool.active { color: var(--brand); background: var(--brand-soft); }
-.message-tool :deep(svg) { width: 14px; }
-.branch-switcher { display: flex; align-items: center; gap: 3px; margin-left: 4px; color: var(--faint); font-size: 10px; }
-.branch-switcher button { display: flex; width: 24px; height: 24px; align-items: center; justify-content: center; color: inherit; background: transparent; border-radius: 4px; border: 0; cursor: pointer; }
-.branch-switcher :deep(svg) { width: 12px; }
-
+/* ─── Sources ─── */
 .sources { margin-top: 14px; }
 .sources-title { display: flex; align-items: center; gap: 6px; color: var(--text-secondary); font-size: 11px; font-weight: 650; }
 .source-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; margin-top: 7px; }
@@ -469,45 +610,36 @@ defineExpose({ scrollToBottom })
 .source-name { display: block; overflow: hidden; font-size: 10px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
 .source-domain { display: block; overflow: hidden; margin-top: 2px; color: var(--faint); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
 
+/* ─── Artifact ─── */
 .artifact { display: flex; align-items: center; gap: 10px; margin-top: 13px; padding: 10px; background: color-mix(in srgb, var(--success) 5%, var(--surface)); border: 1px solid color-mix(in srgb, var(--success) 20%, var(--line)); border-radius: 7px; }
 .artifact-icon { display: flex; width: 34px; height: 34px; flex: 0 0 34px; align-items: center; justify-content: center; color: var(--success); background: var(--surface); border: 1px solid var(--line); border-radius: 6px; }
 .artifact-copy { min-width: 0; flex: 1; }
 .artifact-name { overflow: hidden; font-size: 11px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
 .artifact-meta { margin-top: 3px; color: var(--faint); font-size: 9px; }
 
+/* ─── Jump to bottom button ─── */
 .jump-bottom {
-  position: absolute; z-index: 5; bottom: 10px; left: 50%;
-  display: flex; height: 32px; align-items: center; gap: 6px; padding: 0 10px;
-  color: var(--text-secondary); background: var(--surface); border: 1px solid var(--line-strong); border-radius: 16px;
-  box-shadow: var(--shadow-md); font-size: 11px;
-  transform: translateX(-50%); cursor: pointer;
+  position: absolute;
+  z-index: 5;
+  bottom: 10px;
+  left: 50%;
+  display: flex;
+  height: 32px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  color: var(--text-secondary);
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: 16px;
+  box-shadow: var(--shadow-md);
+  font-size: 11px;
+  transform: translateX(-50%);
+  cursor: pointer;
 }
 .jump-bottom :deep(svg) { width: 13px; }
 
-/*
-.markdown :deep(.mermaid-config-toolbar) { display: flex; align-items: center; gap: 4px; margin: 8px 0; padding: 4px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 5px; }
-.markdown :deep(.mermaid-config-toolbar button) { display: inline-flex; width: 28px; height: 28px; align-items: center; justify-content: center; color: var(--muted); background: transparent; border: 0; border-radius: 4px; cursor: pointer; }
-.markdown :deep(.mermaid-config-toolbar button:hover) { color: var(--brand); background: var(--brand-soft); }
-*/
-
-.code-viewer-backdrop { position: fixed; z-index: 120; inset: 0; display: flex; justify-content: flex-end; background: color-mix(in srgb, var(--text) 28%, transparent); }
-.code-viewer-drawer { display: flex; width: min(720px, 100vw); max-width: 100%; flex-direction: column; background: var(--surface); border-left: 1px solid var(--line); box-shadow: var(--shadow-lg); }
-.code-viewer-head { display: flex; min-height: var(--header); align-items: center; gap: 8px; padding: 0 12px; color: var(--text-secondary); background: var(--surface-2); border-bottom: 1px solid var(--line); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; }
-.code-viewer-actions { display: flex; margin-left: auto; }
-.code-viewer-content { min-height: 0; flex: 1; overflow: auto; margin: 0; padding: 16px; color: var(--code-text); background: var(--code-bg); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; line-height: 1.65; white-space: pre; }
-
-.avatar { display: flex; width: 30px; height: 30px; flex: 0 0 30px; align-items: center; justify-content: center; color: var(--brand); background: var(--brand-soft); border-radius: 50%; font-size: 11px; font-weight: 750; }
-
-.secondary {
-  display: inline-flex; min-height: 34px; align-items: center; justify-content: center;
-  gap: 7px; padding: 0 11px; color: var(--text-secondary); background: var(--surface);
-  border: 1px solid var(--line-strong); border-radius: 6px;
-  font-size: 12px; font-weight: 600; cursor: pointer;
-}
-.secondary:hover { background: var(--surface-2); }
-
-/* ─── Block-based styles ─── */
-
+/* ─── Usage ─── */
 .message-usage {
   display: flex;
   align-items: center;
@@ -523,6 +655,7 @@ defineExpose({ scrollToBottom })
 .message-usage :deep(svg) { width: 11px; opacity: 0.7; }
 .usage-sep { opacity: 0.4; }
 
+/* ─── Citation block ─── */
 .citation-block {
   margin-top: 10px;
   padding: 8px 10px;
@@ -545,6 +678,7 @@ defineExpose({ scrollToBottom })
   line-height: 1.6;
 }
 
+/* ─── Tool block ─── */
 .tool-block {
   margin-top: 10px;
   padding: 8px 10px;
@@ -574,10 +708,35 @@ defineExpose({ scrollToBottom })
   word-break: break-all;
 }
 
+/* ─── Secondary button ─── */
+.secondary {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 11px;
+  color: var(--text-secondary);
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.secondary:hover { background: var(--surface-2); }
+
+/* ─── Code viewer drawer ─── */
+.code-viewer-backdrop { position: fixed; z-index: 120; inset: 0; display: flex; justify-content: flex-end; background: color-mix(in srgb, var(--text) 28%, transparent); }
+.code-viewer-drawer { display: flex; width: min(720px, 100vw); max-width: 100%; flex-direction: column; background: var(--surface); border-left: 1px solid var(--line); box-shadow: var(--shadow-lg); }
+.code-viewer-head { display: flex; min-height: var(--header); align-items: center; gap: 8px; padding: 0 12px; color: var(--text-secondary); background: var(--surface-2); border-bottom: 1px solid var(--line); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; }
+.code-viewer-actions { display: flex; margin-left: auto; }
+.code-viewer-content { min-height: 0; flex: 1; overflow: auto; margin: 0; padding: 16px; color: var(--code-text); background: var(--code-bg); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; line-height: 1.65; white-space: pre; }
+
 /* ─── Settings-driven styles ─── */
 
 /* Plain mode: remove bubble styling from user messages */
-.message.plain-mode .user-bubble {
+.chat-area.plain-mode :deep(.elx-bubble--end .elx-bubble__content) {
   background: transparent;
   border: 0;
   border-radius: 0;
@@ -585,56 +744,33 @@ defineExpose({ scrollToBottom })
 }
 
 /* Show divider between messages */
-.message.show-divider {
+.chat-area.show-divider :deep(.elx-bubble-list__item) {
   border-bottom: 1px solid var(--line);
   padding-bottom: 20px;
 }
 
-/* ── 以下代码块自定义样式已注释，使用 x-markdown-vue 组件自带样式 ──
-/* Code block: wrappable (applied via message class) */
-/*
-.message.code-wrappable .markdown :deep(pre) {
-  white-space: pre-wrap !important;
-  word-break: break-word;
+/* ─── Bubble customization ─── */
+.chat-area :deep(.elx-bubble) {
+  margin-bottom: 28px;
 }
-*/
+.chat-area :deep(.elx-bubble--start) {
+  --elx-bubble-max-width: none;
+}
+.chat-area :deep(.elx-bubble--end) {
+  --elx-bubble-max-width: min(82%, 660px);
+}
+.chat-area :deep(.elx-bubble__content) {
+  min-width: 0;
+}
 
-/* Code block: line numbers (applied via message class) */
-/*
-.message.code-line-numbers .markdown :deep(pre) {
-  counter-reset: line;
-  padding-left: 3.5em !important;
-}
-.message.code-line-numbers .markdown :deep(pre > code) {
-  counter-reset: line;
-  display: block;
-}
-.message.code-line-numbers .markdown :deep(pre > code > span) {
-  counter-increment: line;
-}
-.message.code-line-numbers .markdown :deep(pre > code > span::before) {
-  content: counter(line);
-  display: inline-block;
-  width: 2em;
-  margin-right: 1em;
-  margin-left: -3em;
-  color: var(--faint);
-  text-align: right;
-  user-select: none;
-}
-*/
-
+/* ─── Mobile responsive ─── */
 @media (max-width: 760px) {
-  .message-list { padding: 22px 13px 125px; }
-  .message { grid-template-columns: 26px minmax(0, 1fr); gap: 8px; margin-bottom: 23px; }
-  .message.user { grid-template-columns: minmax(0, 1fr); }
-  .message.user > .avatar { display: none; }
-  .assistant-avatar { width: 26px; height: 26px; }
-  .message.user .message-content { max-width: 90%; }
+  .chat-area :deep(.elx-bubble-list) { padding: 22px 13px 125px; }
+  .chat-area :deep(.elx-bubble) { margin-bottom: 23px; }
   .message-tools { opacity: 1; }
   .source-list { grid-template-columns: 1fr; }
 }
 @media (max-width: 390px) {
-  .message-list { padding-right: 10px; padding-left: 10px; }
+  .chat-area :deep(.elx-bubble-list) { padding-right: 10px; padding-left: 10px; }
 }
 </style>

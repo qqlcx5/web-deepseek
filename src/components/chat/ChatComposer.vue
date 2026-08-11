@@ -1,17 +1,27 @@
 <script setup lang="ts">
-import { ref, nextTick, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useChatStore } from '@/stores/chat'
 import { useAppStore } from '@/stores/app'
 import { useUiStore } from '@/stores/ui'
 import { Icon } from '@iconify/vue'
-import { Attachments } from 'vue-element-plus-x'
+import { Attachments, XSender, useSend } from 'vue-element-plus-x'
 import { estimateTokens } from '@/utils/token-counter'
 
 const store = useChatStore()
 const appStore = useAppStore()
 const uiStore = useUiStore()
-const composer = ref<HTMLTextAreaElement | null>(null)
 const fileInput = ref<HTMLInputElement | null>(null)
+const senderRef = ref<InstanceType<typeof XSender> | null>(null)
+
+// ─── useSend: manage loading state for send/abort ───────────────────────────
+const { send, abort, loading } = useSend({
+  sendHandler: () => {
+    void store.sendMessage()
+  },
+  abortHandler: () => {
+    store.stopGeneration()
+  },
+})
 
 // Map store attachments to Element-Plus-X Attachments format
 function getAttachmentItems() {
@@ -41,46 +51,53 @@ const shortcutLabel = computed(() => {
   return 'Enter 发送 · Shift + Enter 换行'
 })
 
-function resizeComposer() {
-  if (!composer.value) return
-  composer.value.style.height = 'auto'
-  composer.value.style.height = `${Math.min(composer.value.scrollHeight, 160)}px`
+// Map sendShortcut to XSender submitType
+const submitType = computed<'enter' | 'shiftEnter'>(() => {
+  const sc = appStore.settings?.sendShortcut ?? 'Enter'
+  return sc === 'Enter' ? 'enter' : 'shiftEnter'
+})
+
+// XSender disabled state
+const senderDisabled = computed(() => !store.canSend && !store.generating)
+
+// ─── Sync store.draft → XSender text ────────────────────────────────────────
+// XSender doesn't support v-model; we use setText() to push external changes.
+// The @change event pulls text back into store.draft.
+let isInternalUpdate = false
+
+watch(() => store.draft, (newDraft) => {
+  if (isInternalUpdate) return
+  // External change to draft (e.g. store cleared it after send, or editMessage)
+  const currentText = senderRef.value?.getModelValue()?.text ?? ''
+  if (newDraft !== currentText) {
+    senderRef.value?.setText(newDraft ?? '')
+  }
+})
+
+// ─── XSender event handlers ─────────────────────────────────────────────────
+function handleChange() {
+  // Pull text from XSender into store.draft
+  const model = senderRef.value?.getModelValue()
+  if (model) {
+    isInternalUpdate = true
+    store.draft = model.text
+    // Reset flag on next tick to allow external updates again
+    requestAnimationFrame(() => { isInternalUpdate = false })
+  }
 }
 
-function handleKeydown(e: KeyboardEvent) {
-  const shortcut = appStore.settings?.sendShortcut ?? 'Enter'
-
-  if (shortcut === 'Enter') {
-    // Enter sends, Shift+Enter for newline
-    if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
-      e.preventDefault()
-      store.sendMessage()
-      nextTick(() => {
-        resizeComposer()
-        composer.value?.focus()
-      })
-    }
-  } else if (shortcut === 'Ctrl+Enter') {
-    // Ctrl+Enter sends, Enter for newline
-    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && !e.isComposing) {
-      e.preventDefault()
-      store.sendMessage()
-      nextTick(() => {
-        resizeComposer()
-        composer.value?.focus()
-      })
-    }
-  } else if (shortcut === 'Shift+Enter') {
-    // Shift+Enter sends, Enter for newline
-    if (e.key === 'Enter' && e.shiftKey && !e.isComposing) {
-      e.preventDefault()
-      store.sendMessage()
-      nextTick(() => {
-        resizeComposer()
-        composer.value?.focus()
-      })
-    }
+function handleSubmit() {
+  // Sync text before sending
+  const model = senderRef.value?.getModelValue()
+  if (model) {
+    store.draft = model.text
   }
+  send()
+}
+
+function handlePasteFile(firstFile: File, fileList: FileList) {
+  const files = Array.from(fileList)
+  if (files.length) store.addFiles(files)
 }
 
 function handleFiles(e: Event) {
@@ -91,12 +108,7 @@ function handleFiles(e: Event) {
   }
 }
 
-function handlePaste(e: ClipboardEvent) {
-  const pasted = Array.from(e.clipboardData?.files || [])
-  if (pasted.length) store.addFiles(pasted)
-}
-
-defineExpose({ composer, resizeComposer })
+defineExpose({ senderRef })
 </script>
 
 <template>
@@ -107,40 +119,42 @@ defineExpose({ composer, resizeComposer })
       <span>网络已断开。消息将保存在本地，网络恢复后可重试。</span>
     </div>
 
-    <div class="composer">
-      <!-- Reply context -->
-      <div v-if="store.replyingTo" class="reply-context">
-        <Icon icon="tabler:git-branch" />
-        <span>正在从"{{ store.replyingTo }}"创建新分支</span>
-        <button class="icon-btn" style="width:24px;height:24px;flex-basis:24px" @click="store.replyingTo = ''">
-          <Icon icon="tabler:x" width="12" />
-        </button>
-      </div>
+    <XSender
+      ref="senderRef"
+      :placeholder="'输入消息，或粘贴图片和文件'"
+      :auto-focus="false"
+      :submit-type="submitType"
+      :loading="loading"
+      :disabled="senderDisabled"
+      :clearable="false"
+      :tip-config="false"
+      class="composer-sender"
+      @change="handleChange"
+      @submit="handleSubmit"
+      @paste-file="handlePasteFile"
+    >
+      <!-- Header: reply context + attachments -->
+      <template #header>
+        <div v-if="store.replyingTo" class="reply-context">
+          <Icon icon="tabler:git-branch" />
+          <span>正在从"{{ store.replyingTo }}"创建新分支</span>
+          <button class="icon-btn" style="width:24px;height:24px;flex-basis:24px" @click="store.replyingTo = ''">
+            <Icon icon="tabler:x" width="12" />
+          </button>
+        </div>
 
-      <!-- Attachments -->
-      <Attachments
-        v-if="store.attachments.length"
-        :items="getAttachmentItems()"
-        :hide-upload="true"
-        overflow="scrollX"
-        class="composer-attachments"
-        @delete-card="(item: any, index: number) => store.removeAttachment(store.attachments[index])"
-      />
+        <Attachments
+          v-if="store.attachments.length"
+          :items="getAttachmentItems()"
+          :hide-upload="true"
+          overflow="scrollX"
+          class="composer-attachments"
+          @delete-card="(item: any, index: number) => store.removeAttachment(store.attachments[index])"
+        />
+      </template>
 
-      <!-- Textarea -->
-      <textarea
-        ref="composer"
-        v-model="store.draft"
-        rows="1"
-        maxlength="12000"
-        placeholder="输入消息，或粘贴图片和文件"
-        @input="resizeComposer"
-        @keydown="handleKeydown"
-        @paste="handlePaste"
-      />
-
-      <!-- Toolbar -->
-      <div class="composer-toolbar">
+      <!-- Prefix: attachment buttons + token estimate -->
+      <template #prefix>
         <input ref="fileInput" type="file" hidden multiple @change="handleFiles" />
         <button class="icon-btn tooltip" data-tip="添加附件" @click="fileInput?.click()">
           <Icon icon="tabler:paperclip" />
@@ -151,16 +165,32 @@ defineExpose({ composer, resizeComposer })
         <span v-if="showTokenEstimate && store.draft.trim()" class="token-estimate">
           {{ tokenLabel }}
         </span>
-        <span class="composer-hint">{{ shortcutLabel }}</span>
+      </template>
 
-        <button v-if="store.generating" class="send-btn stop" @click="store.stopGeneration()">
+      <!-- Action list: stop button during generation, or send button -->
+      <template #action-list>
+        <button
+          v-if="loading || store.generating"
+          class="send-btn stop"
+          @click="abort"
+        >
           <Icon icon="tabler:square" />
         </button>
-        <button v-else class="send-btn" :disabled="!store.canSend" @click="store.sendMessage()">
+        <button
+          v-else
+          class="send-btn"
+          :disabled="!store.canSend"
+          @click="handleSubmit"
+        >
           <Icon icon="tabler:arrow-up" />
         </button>
-      </div>
-    </div>
+      </template>
+
+      <!-- Footer: shortcut hint -->
+      <template #footer>
+        <span class="composer-hint">{{ shortcutLabel }}</span>
+      </template>
+    </XSender>
   </div>
 </template>
 
@@ -179,11 +209,40 @@ defineExpose({ composer, resizeComposer })
   border-radius: 6px; font-size: 11px;
 }
 .offline-banner :deep(svg) { width: 14px; height: 14px; }
-.composer {
-  width: min(100%, 820px); margin: 0 auto; background: var(--surface);
-  border: 1px solid var(--line-strong); border-radius: 8px;
+
+.composer-sender {
+  width: min(100%, 820px);
+  margin: 0 auto;
+}
+
+/* XSender inner styling overrides */
+.composer-sender :deep(.elx-x-sender) {
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
   box-shadow: var(--shadow-md);
 }
+.composer-sender :deep(.elx-x-sender:focus-within) {
+  border-color: var(--brand);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--brand) 30%, transparent);
+}
+.composer-sender :deep(.elx-x-sender__content) {
+  align-items: flex-end;
+}
+.composer-sender :deep(.chat-rich-text) {
+  font-size: 13px;
+  line-height: 1.55;
+  font-family: inherit;
+  color: var(--text);
+  min-height: 48px;
+  max-height: 160px;
+}
+.composer-sender :deep(.chat-placeholder-wrap) {
+  font-size: 13px;
+  color: var(--faint);
+}
+
+/* Header */
 .reply-context {
   display: flex; min-height: 34px; align-items: center; gap: 7px;
   padding: 6px 10px; color: var(--text-secondary); background: var(--surface-2);
@@ -191,42 +250,54 @@ defineExpose({ composer, resizeComposer })
 }
 .reply-context :deep(svg) { width: 13px; color: var(--brand); }
 .reply-context span { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.attachments { display: flex; gap: 7px; overflow-x: auto; padding: 9px 10px 0; }
-.attachment { display: flex; width: 190px; min-width: 190px; align-items: center; gap: 8px; padding: 7px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 6px; }
-.file-icon { display: flex; width: 29px; height: 29px; flex: 0 0 29px; align-items: center; justify-content: center; color: var(--muted); background: var(--surface); border: 1px solid var(--line); border-radius: 5px; }
-.file-icon :deep(svg) { width: 14px; }
-.file-copy { min-width: 0; flex: 1; }
-.file-name { display: block; overflow: hidden; font-size: 10px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
-.file-state { display: block; margin-top: 2px; color: var(--success); font-size: 9px; }
-.composer textarea {
-  display: block; width: 100%; min-height: 48px; max-height: 160px; resize: none;
-  padding: 12px 12px 6px; color: var(--text); background: transparent; border: 0;
-  outline: 0; font-size: 13px; line-height: 1.55; font-family: inherit;
+
+.composer-attachments {
+  padding: 9px 10px 0;
 }
-.composer textarea::placeholder { color: var(--faint); }
-.composer-toolbar { display: flex; min-height: 42px; align-items: center; gap: 2px; padding: 4px 7px 7px; }
+
+/* Prefix */
+.composer-sender :deep(.elx-x-sender__prefix) {
+  gap: 2px;
+  height: auto;
+  padding-left: 6px;
+}
+
+/* Token estimate */
 .token-estimate {
   padding: 2px 6px; color: var(--faint); background: var(--surface-3);
   border: 1px solid var(--line); border-radius: 4px; font-size: 9px;
   white-space: nowrap;
+  margin-left: 4px;
 }
-.composer-hint { margin-left: auto; color: var(--faint); font-size: 9px; }
+
+/* Action list */
+.composer-sender :deep(.elx-x-sender__action-list) {
+  padding-right: 7px;
+  padding-bottom: 7px;
+  height: auto;
+}
+
+/* Send / Stop button */
 .send-btn { display: flex; width: 32px; height: 32px; align-items: center; justify-content: center; margin-left: 6px; color: white; background: var(--brand); border-radius: 6px; border: 0; cursor: pointer; }
 .send-btn:disabled { color: var(--faint); background: var(--surface-3); cursor: not-allowed; }
 .send-btn.stop { background: var(--danger); }
 .send-btn :deep(svg) { width: 16px; height: 16px; }
 
-.icon-btn { display: inline-flex; width: 34px; height: 34px; flex: 0 0 34px; align-items: center; justify-content: center; border-radius: 6px; color: var(--muted); background: transparent; border: 0; cursor: pointer; transition: background 140ms, color 140ms; }
+/* Footer */
+.composer-sender :deep(.elx-x-sender__footer) {
+  padding: 4px 10px 6px;
+}
+.composer-hint { color: var(--faint); font-size: 9px; }
+
+/* Icon buttons */
+.icon-btn { display: inline-flex; width: 30px; height: 30px; flex: 0 0 30px; align-items: center; justify-content: center; border-radius: 6px; color: var(--muted); background: transparent; border: 0; cursor: pointer; transition: background 140ms, color 140ms; }
 .icon-btn:hover { color: var(--text); background: var(--surface-3); }
-.icon-btn :deep(svg) { width: 17px; height: 17px; }
+.icon-btn :deep(svg) { width: 16px; height: 16px; }
 
 @media (max-width: 760px) {
   .composer-wrap { padding: 7px 8px max(7px, env(safe-area-inset-bottom)); }
-  .composer { border-radius: 7px; }
+  .composer-sender :deep(.elx-x-sender) { border-radius: 7px; }
   .composer-hint { display: none; }
   .token-estimate { display: none; }
-}
-@media (max-width: 390px) {
-  .composer-toolbar { padding-right: 5px; padding-left: 5px; }
 }
 </style>

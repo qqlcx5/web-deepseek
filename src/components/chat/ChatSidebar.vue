@@ -1,13 +1,14 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { useChatStore } from '@/stores/chat'
 import { useUiStore } from '@/stores/ui'
 import { Icon } from '@iconify/vue'
+import { Conversations } from 'vue-element-plus-x'
+import type { ConversationItem, ConversationMenuCommand } from 'vue-element-plus-x/types/components/Conversations/types'
 
 const store = useChatStore()
 const uiStore = useUiStore()
 const fileInput = ref<HTMLInputElement | null>(null)
-const menuOpenId = ref<string | null>(null)
 const renamingId = ref<string | null>(null)
 const renameValue = ref('')
 
@@ -19,45 +20,56 @@ function handleImport(e: Event) {
   }
 }
 
-function startRename(id: string, currentName: string) {
-  renamingId.value = id
-  renameValue.value = currentName
-  menuOpenId.value = null
+// Map store.chats → Conversations items
+const conversationItems = computed<ConversationItem[]>(() =>
+  store.chats.map(chat => ({
+    id: chat.id,
+    label: chat.title,
+    group: chat.pinned ? '置顶' : '最近',
+    data: chat,
+  })),
+)
+
+// Active binding
+const activeId = computed(() => store.activeChatId ?? '')
+
+function handleChange(item: ConversationItem) {
+  const id = (item as any).id as string
+  if (id) store.openConversation(id)
+}
+
+// Menu: pin/unpin, rename, clear messages, delete
+function handleMenuCommand(command: ConversationMenuCommand, item: ConversationItem) {
+  const chat = (item as any).data ?? item
+  const id = (chat as any).id as string
+  if (!id) return
+
+  switch (command) {
+    case 'pin':
+      store.togglePin?.(id)
+      break
+    case 'rename':
+      renamingId.value = id
+      renameValue.value = (chat as any).title ?? (item as any).label ?? ''
+      break
+    case 'clear':
+      store.clearConversation?.(id)
+      break
+    case 'delete':
+      store.deleteConversation(id)
+      break
+  }
 }
 
 function confirmRename() {
   if (renamingId.value && renameValue.value.trim()) {
-    // Find the topic and rename via appStore
-    const chat = store.chats.find(c => c.id === renamingId.value)
-    if (chat) {
-      // Use the store's currentChat to access appStore.renameTopic
-      // We'll call it through a method we expose on chat store
-      store.renameTopic?.(renamingId.value, renameValue.value.trim())
-    }
+    store.renameTopic?.(renamingId.value, renameValue.value.trim())
   }
   renamingId.value = null
 }
 
-function handleDelete(id: string) {
-  store.deleteConversation(id)
-  menuOpenId.value = null
-}
-
-function handlePin(id: string) {
-  // Toggle pin via appStore through chat store
-  store.togglePin?.(id)
-  menuOpenId.value = null
-}
-
-function toggleMenu(id: string, e: Event) {
-  e.stopPropagation()
-  menuOpenId.value = menuOpenId.value === id ? null : id
-}
-
-// Close menu on outside click
-if (typeof document !== 'undefined') {
-  document.addEventListener('click', () => { menuOpenId.value = null })
-}
+// Whether clearConversation exists on store
+const hasClearConversation = computed(() => typeof store.clearConversation === 'function')
 </script>
 
 <template>
@@ -136,58 +148,80 @@ if (typeof document !== 'undefined') {
       </div>
 
       <div class="section-label" style="margin-top:10px">会话</div>
-      <button
-        v-for="chat in store.chats"
-        :key="chat.id"
-        class="chat-row"
-        :class="{ active: store.activeChatId === chat.id }"
-        @click="store.openConversation(chat.id)"
-        @contextmenu.prevent="toggleMenu(chat.id, $event)"
-      >
-        <Icon
-          :icon="chat.pinned ? 'tabler:pinned' : 'tabler:message'"
-          class="chat-icon"
+
+      <!-- Rename overlay -->
+      <div v-if="renamingId" class="rename-overlay" @click.stop>
+        <input
+          v-model="renameValue"
+          class="rename-input"
+          placeholder="输入新名称"
+          @keydown.enter="confirmRename"
+          @keydown.escape="renamingId = null"
+          @blur="confirmRename"
         />
-        <span class="chat-copy">
-          <span v-if="renamingId === chat.id" class="rename-input-wrap" @click.stop>
-            <input
-              v-model="renameValue"
-              class="rename-input"
-              @keydown.enter="confirmRename"
-              @keydown.escape="renamingId = null"
-              @blur="confirmRename"
-              ref="renameInput"
-            />
-          </span>
-          <span v-else class="chat-title">{{ chat.title }}</span>
-          <span class="chat-preview">{{ chat.preview }}</span>
-        </span>
-        <div
-          v-if="menuOpenId === chat.id"
-          class="chat-menu"
-          @click.stop
-        >
-          <button class="menu-item" @click="handlePin(chat.id)">
-            <Icon icon="tabler:pinned" width="13" />
-            {{ chat.pinned ? '取消置顶' : '置顶' }}
-          </button>
-          <button class="menu-item" @click="startRename(chat.id, chat.title)">
-            <Icon icon="tabler:edit" width="13" />
-            重命名
-          </button>
-          <button class="menu-item danger" @click="handleDelete(chat.id)">
-            <Icon icon="tabler:trash" width="13" />
-            删除
-          </button>
-        </div>
-        <button
-          v-else
-          class="chat-more"
-          @click.stop="toggleMenu(chat.id, $event)"
-        >
-          <Icon icon="tabler:dots-vertical" width="14" />
-        </button>
-      </button>
+      </div>
+
+      <Conversations
+        :items="conversationItems"
+        :active="activeId"
+        :groupable="{ sort: (a: string, b: string) => (a === '置顶' ? -1 : b === '置顶' ? 1 : 0) }"
+        row-key="id"
+        label-key="label"
+        @change="handleChange"
+        @menu-command="handleMenuCommand"
+        :items-style="{
+          borderRadius: '6px',
+          padding: '7px 8px',
+          minHeight: '48px',
+        }"
+        :items-hover-style="{
+          background: 'var(--surface-3)',
+        }"
+        :items-active-style="{
+          color: 'var(--brand)',
+          background: 'var(--brand-soft)',
+        }"
+        :style="{
+          width: '100%',
+          height: 'auto',
+          padding: '0',
+          background: 'transparent',
+        }"
+      >
+        <!-- Custom label: title + preview (two lines) -->
+        <template #label="{ item }">
+          <div class="conv-label">
+            <span class="conv-title">{{ (item as any).data?.title ?? item.label }}</span>
+            <span class="conv-preview">{{ (item as any).data?.preview }}</span>
+          </div>
+        </template>
+
+        <!-- Custom menu -->
+        <template #menu="{ item, handleOpen }">
+          <div class="conv-menu" @click.stop>
+            <button class="menu-item" @click="handleMenuCommand('pin', item); handleOpen(false)">
+              <Icon icon="tabler:pinned" width="13" />
+              {{ (item as any).data?.pinned ? '取消置顶' : '置顶' }}
+            </button>
+            <button class="menu-item" @click="handleMenuCommand('rename', item); handleOpen(false)">
+              <Icon icon="tabler:edit" width="13" />
+              重命名
+            </button>
+            <button
+              v-if="hasClearConversation"
+              class="menu-item"
+              @click="handleMenuCommand('clear', item); handleOpen(false)"
+            >
+              <Icon icon="tabler:eraser" width="13" />
+              清空消息
+            </button>
+            <button class="menu-item danger" @click="handleMenuCommand('delete', item); handleOpen(false)">
+              <Icon icon="tabler:trash" width="13" />
+              删除
+            </button>
+          </div>
+        </template>
+      </Conversations>
     </div>
 
     <button class="profile" @click="uiStore.showToast('账户菜单已打开')">
@@ -273,29 +307,93 @@ if (typeof document !== 'undefined') {
 .assistant-tab-emoji { width: 16px; flex: 0 0 16px; overflow: hidden; text-align: center; font-size: 12px; }
 .assistant-tab-name { min-width: 0; flex: 1; overflow: hidden; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
 .assistant-tab-count { color: var(--faint); font-size: 9px; font-variant-numeric: tabular-nums; }
-.chat-row {
-  display: flex; width: 100%; min-width: 0; align-items: center; gap: 8px;
-  color: var(--text-secondary); background: transparent; border-radius: 6px; text-align: left;
+
+/* Conversations component overrides */
+.sidebar-scroll :deep(.el-conversations) {
+  width: 100% !important;
 }
-.chat-row:hover { background: var(--surface-3); }
-.chat-row { position: relative; min-height: 48px; padding: 7px 8px; }
-.chat-row.active { color: var(--brand); background: var(--brand-soft); }
-.chat-icon { width: 16px; flex: 0 0 16px; color: var(--faint); }
-.chat-copy { min-width: 0; flex: 1; }
-.chat-title { display: block; overflow: hidden; font-size: 12px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
-.chat-preview { display: block; overflow: hidden; margin-top: 3px; color: var(--faint); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
-.chat-more { display: flex; width: 24px; height: 24px; flex: 0 0 24px; align-items: center; justify-content: center; color: var(--faint); background: transparent; border: 0; border-radius: 4px; cursor: pointer; opacity: 0; transition: opacity 140ms; }
-.chat-row:hover .chat-more { opacity: 1; }
-.chat-more:hover { color: var(--text); background: var(--surface-3); }
-.chat-more :deep(svg) { width: 14px; height: 14px; }
-.chat-menu { position: absolute; right: 4px; top: 36px; z-index: 50; min-width: 120px; padding: 4px; background: var(--surface); border: 1px solid var(--line-strong); border-radius: 6px; box-shadow: var(--shadow-md); display: flex; flex-direction: column; gap: 1px; }
-.menu-item { display: flex; width: 100%; align-items: center; gap: 7px; padding: 6px 8px; color: var(--text-secondary); background: transparent; border: 0; border-radius: 4px; font-size: 11px; text-align: left; cursor: pointer; }
+.sidebar-scroll :deep(.el-conversations__list) {
+  padding: 0 !important;
+  background: transparent !important;
+  height: auto !important;
+  width: 100% !important;
+}
+.sidebar-scroll :deep(.el-conversations__scroll-wrapper) {
+  padding-right: 2px;
+}
+.sidebar-scroll :deep(.el-scrollbar__view) {
+  padding: 0 !important;
+}
+.sidebar-scroll :deep(.el-conversations__group-title) {
+  color: var(--faint);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  padding: 6px 7px 4px;
+}
+
+/* Conversation item label */
+.conv-label {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+  gap: 2px;
+}
+.conv-title {
+  display: block;
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+}
+.conv-preview {
+  display: block;
+  overflow: hidden;
+  color: var(--faint);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Custom menu */
+.conv-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 120px;
+  padding: 4px;
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  box-shadow: var(--shadow-md);
+}
+.menu-item {
+  display: flex; width: 100%; align-items: center; gap: 7px; padding: 6px 8px; color: var(--text-secondary); background: transparent; border: 0; border-radius: 4px; font-size: 11px; text-align: left; cursor: pointer;
+}
 .menu-item:hover { color: var(--text); background: var(--surface-3); }
 .menu-item :deep(svg) { width: 13px; height: 13px; }
 .menu-item.danger { color: var(--danger); }
 .menu-item.danger:hover { background: color-mix(in srgb, var(--danger) 10%, transparent); }
-.rename-input-wrap { width: 100%; }
-.rename-input { width: 100%; padding: 2px 4px; color: var(--text); background: var(--surface); border: 1px solid var(--brand); border-radius: 3px; font-size: 12px; outline: 0; }
+
+/* Rename overlay */
+.rename-overlay {
+  padding: 4px 8px;
+  margin-bottom: 4px;
+}
+.rename-input {
+  width: 100%;
+  padding: 4px 6px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--brand);
+  border-radius: 4px;
+  font-size: 12px;
+  outline: 0;
+}
+
 .profile {
   display: flex; height: 58px; flex: 0 0 58px; align-items: center; gap: 9px;
   padding: 0 12px; background: var(--surface); border-top: 1px solid var(--line); text-align: left;
