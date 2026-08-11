@@ -5,27 +5,18 @@ const router = createRouter({
   routes: [
     {
       path: '/',
-      name: 'DemoPage',
-      // route level code-splitting
-      // this generates a separate chunk (About.[hash].js) for this route
-      // which is lazy-loaded when the route is visited.
-      component: () => import('../views/DemoPage.vue'),
+      name: 'chat',
+      component: () => import('@/views/ChatView.vue'),
     },
     {
-      path: '/ModernProTable',
-      name: 'ModernProTable',
-      // route level code-splitting
-      // this generates a separate chunk (About.[hash].js) for this route
-      // which is lazy-loaded when the route is visited.
-      component: () => import('../views/ModernProTable.vue'),
+      path: '/search',
+      name: 'search',
+      component: () => import('@/views/SearchView.vue'),
     },
     {
-      path: '/ErpProTable',
-      name: 'ErpProTable',
-      // route level code-splitting
-      // this generates a separate chunk (About.[hash].js) for this route
-      // which is lazy-loaded when the route is visited.
-      component: () => import('../views/ErpProTable.vue'),
+      path: '/settings',
+      name: 'settings',
+      component: () => import('@/views/SettingsView.vue'),
     },
   ],
 })

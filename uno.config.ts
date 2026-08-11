@@ -51,6 +51,13 @@ export default defineConfig({
       danger: '#f56c6c',
       error: '#f56c6c',
       info: '#909399',
+      brand: '#5b56d6',
+      'brand-hover': '#4a45bd',
+      'brand-soft': '#efefff',
+      ink: '#172033',
+      muted: '#667085',
+      line: '#e5e7eb',
+      panel: '#f8fafc',
     },
   },
 })
