@@ -3,104 +3,65 @@ import { ref, computed } from 'vue'
 import { XSender } from 'vue-element-plus-x'
 import { ElMessage } from 'element-plus'
 import { useAppStore } from '@/stores/app'
-import VoiceInput from '@/components/VoiceInput.vue'
 
 const app = useAppStore()
 const emit = defineEmits<{ send: [text: string] }>()
 
-const inputValue = ref('')
+// XSender 不支持 v-model（Props 无 modelValue），值通过 ref.getModelValue() 获取（见 wiki submit-type 示例）
+const senderRef = ref<any>(null)
 const loading = ref(false)
-const showAttachments = ref(false)
-const voiceText = ref('')
 
 const selectedModelName = computed(() => app.activeAssistant?.model?.name ?? 'GPT-4o')
 
-// Mention config — @ 触发模型/助手选择
-const mentionConfig = {
-  trigger: '@',
-  options: app.assistants.map(a => ({
-    label: `${a.emoji} ${a.name}`,
-    value: a.id,
-  })),
-}
+// XSender MentionConfig：options 是 { id, name }
+const mentionConfig = computed(() => ({
+  dialogTitle: '提及助手',
+  options: app.assistants.map(a => ({ id: a.id, name: `${a.emoji} ${a.name}` })),
+}))
 
-// Trigger config — / 触发指令
-const triggerConfig = [
+// XSender TriggerConfig：dialogTitle + key + options[{id,name}]
+const triggerConfig = computed(() => [
   {
-    key: 'slash',
-    trigger: '/',
+    dialogTitle: '快捷指令',
+    key: '/',
     options: [
-      { label: '清空对话', value: '/clear' },
-      { label: '导出对话', value: '/export' },
-      { label: '切换模型', value: '/model' },
-      { label: '重命名话题', value: '/rename' },
+      { id: '/clear', name: '清空对话' },
+      { id: '/export', name: '导出对话' },
+      { id: '/model', name: '切换模型' },
+      { id: '/rename', name: '重命名话题' },
     ],
   },
-]
+])
 
+// XSender submit 事件无参，用 getModelValue() 取值、setModelValue() 清空
 function onSubmit() {
-  const value = inputValue.value
+  const value: string = senderRef.value?.getModelValue?.() ?? ''
   if (!value?.trim() || loading.value) return
   emit('send', value.trim())
-  inputValue.value = ''
-  voiceText.value = ''
+  senderRef.value?.setModelValue?.('')
 }
 
 function onCancel() {
   loading.value = false
   ElMessage.info('已取消')
 }
-
-// Handle paste — long text → attachment (per settings)
-function onPasteFile(file: File) {
-  // XSender emits pasteFile for pasted files/images
-  // For now, just emit a notice
-  ElMessage.info(`粘贴文件: ${file.name}`)
-}
-
-// Token 估算（粗略）
-function estimateTokens(text: string): number {
-  return Math.ceil(text.length / 4)
-}
-
-const tokenEstimate = computed(() => estimateTokens(inputValue.value))
-
-// Handle voice input
-function onVoiceInput(val: string) {
-  // VoiceInput emits full text including prior content
-  inputValue.value = val
-}
 </script>
 
 <template>
   <div class="sender-wrap">
-    <div v-if="app.settings.showInputEstimatedTokens && inputValue" class="token-hint">
-      ≈ {{ tokenEstimate }} tokens
-    </div>
-
+    <!-- 不用 #action-list 插槽：它会隐藏 XSender 内置操作按钮（发送/附件/清空） -->
     <XSender
-      v-model="inputValue"
+      ref="senderRef"
       :loading="loading"
-      :disabled="false"
       :auto-focus="true"
-      :submit-type="app.settings.sendMessageShortcut === 'Enter' ? 'enter' : 'shift-enter'"
-      placeholder="输入消息，按 Enter 发送 · Shift + Enter 换行 · @ 提及 · / 指令"
+      :submit-type="app.settings.sendMessageShortcut === 'Enter' ? 'enter' : 'shiftEnter'"
+      placeholder="输入消息，按 Enter 发送 · @ 提及 · / 指令"
       :clearable="true"
       :mention-config="mentionConfig"
       :trigger-config="triggerConfig"
       @submit="onSubmit"
       @cancel="onCancel"
-      @paste-file="onPasteFile"
-    >
-      <template #action-list>
-        <div class="action-list">
-          <VoiceInput
-            :model-value="voiceText"
-            @update:model-value="onVoiceInput"
-          />
-        </div>
-      </template>
-    </XSender>
+    />
 
     <div class="sender-footer">
       <div class="footer-left">
@@ -121,20 +82,6 @@ function onVoiceInput(val: string) {
   position: relative;
   max-width: 820px;
   margin: 0 auto;
-}
-
-.token-hint {
-  position: absolute;
-  top: -24px;
-  right: 8px;
-  font-size: 11px;
-  color: #9ca3af;
-}
-
-.action-list {
-  display: flex;
-  align-items: center;
-  gap: 4px;
 }
 
 .sender-footer {
