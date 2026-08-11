@@ -5,7 +5,14 @@ import { useAppStore } from '@/stores/app'
 import { exportToCherryV5, validateForExport } from '@/utils/exporter'
 
 const app = useAppStore()
-const visible = ref(false)
+const props = defineProps<{ visible: boolean }>()
+const emit = defineEmits<{ 'update:visible': [val: boolean] }>()
+
+const visible = computed({
+  get: () => props.visible,
+  set: (v: boolean) => emit('update:visible', v),
+})
+
 const includeApiKey = ref(false)
 const exporting = ref(false)
 
@@ -24,7 +31,6 @@ const overview = computed(() => {
 })
 
 function open() {
-  visible.value = true
   includeApiKey.value = false
   exporting.value = false
 }
@@ -56,7 +62,7 @@ function doExport() {
     URL.revokeObjectURL(url)
 
     ElMessage.success('导出成功')
-    visible.value = false
+    emit('update:visible', false)
   } catch (e) {
     ElMessage.error(`导出失败: ${(e as Error).message}`)
   } finally {

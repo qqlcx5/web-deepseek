@@ -980,4 +980,4 @@ interface NoteModule {
 | `knowledgeRecognition` | ❌ | ✅ | ❌ | ❌ |
 | `enableWebSearch` | ❌ | ✅ | ✅ | ❌ |
 | `description` | ❌ | ❌ | ✅ | ❌ |
-*（内容由AI生成，仅供参考）*
+**

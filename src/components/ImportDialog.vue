@@ -6,7 +6,14 @@ import { parseCherryV5 } from '@/utils/importer'
 import type { AppData } from '@/types'
 
 const app = useAppStore()
-const visible = ref(false)
+const props = defineProps<{ visible: boolean }>()
+const emit = defineEmits<{ 'update:visible': [val: boolean] }>()
+
+const visible = computed({
+  get: () => props.visible,
+  set: (v: boolean) => emit('update:visible', v),
+})
+
 const fileName = ref('')
 const fileContent = ref('')
 const parseResult = ref<{ data?: AppData; warnings: string[]; errors: string[] } | null>(null)
@@ -23,11 +30,6 @@ const preview = computed(() => {
     warnings: parseResult.value.warnings.length,
   }
 })
-
-function open() {
-  visible.value = true
-  reset()
-}
 
 function reset() {
   fileName.value = ''
@@ -77,7 +79,7 @@ function confirmImport() {
   }
 }
 
-defineExpose({ open })
+defineExpose({ reset })
 </script>
 
 <template>

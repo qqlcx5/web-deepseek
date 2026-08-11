@@ -7,7 +7,7 @@ const app = useAppStore()
 
 const themeOverrides = computed(() => ({
   common: {
-    'color-primary': '#5b56d6',
+    'color-primary': app.settings.userTheme?.colorPrimary || '#5b56d6',
   },
 }))
 </script>
@@ -20,6 +20,7 @@ const themeOverrides = computed(() => ({
     apply-to="root"
   >
     <RouterView />
+    <component :is="'style'" v-if="app.settings.customCss" v-html="app.settings.customCss" />
   </ConfigProvider>
 </template>
 

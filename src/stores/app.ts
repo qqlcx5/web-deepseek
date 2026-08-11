@@ -568,8 +568,12 @@ export const useAppStore = defineStore('app', () => {
   }
 
   function toggleTheme() {
+    if (settings.value.theme === 'auto') {
+      settings.value.theme = isDark.value ? 'light' : 'dark'
+    } else {
+      settings.value.theme = isDark.value ? 'light' : 'dark'
+    }
     isDark.value = !isDark.value
-    settings.value.theme = isDark.value ? 'dark' : 'light'
   }
 
   // ===== Persistence methods =====
@@ -587,6 +591,8 @@ export const useAppStore = defineStore('app', () => {
           activeTopicId.value = sorted[0]?.id ?? ''
         }
       }
+      // Apply theme on init
+      applyTheme()
       saveStatus.value = 'idle'
     } catch (e) {
       console.error('[appStore] init failed', e)
@@ -599,6 +605,14 @@ export const useAppStore = defineStore('app', () => {
       () => { saveQueue.enqueue(getAppData()) },
       { deep: true }
     )
+  }
+
+  function applyTheme() {
+    if (settings.value.theme === 'auto') {
+      isDark.value = window.matchMedia('(prefers-color-scheme: dark)').matches
+    } else {
+      isDark.value = settings.value.theme === 'dark'
+    }
   }
 
   async function flushSave() {
@@ -663,6 +677,7 @@ export const useAppStore = defineStore('app', () => {
     // Settings
     updateSettings,
     toggleTheme,
+    applyTheme,
     // AppData
     getAppData,
     setAppData,

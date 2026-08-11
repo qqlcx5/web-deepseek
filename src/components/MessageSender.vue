@@ -3,12 +3,15 @@ import { ref, computed } from 'vue'
 import { XSender } from 'vue-element-plus-x'
 import { ElMessage } from 'element-plus'
 import { useAppStore } from '@/stores/app'
+import VoiceInput from '@/components/VoiceInput.vue'
 
 const app = useAppStore()
 const emit = defineEmits<{ send: [text: string] }>()
 
 const inputValue = ref('')
 const loading = ref(false)
+const showAttachments = ref(false)
+const voiceText = ref('')
 
 const selectedModelName = computed(() => app.activeAssistant?.model?.name ?? 'GPT-4o')
 
@@ -39,11 +42,19 @@ function onSubmit(value: string) {
   if (!value?.trim() || loading.value) return
   emit('send', value.trim())
   inputValue.value = ''
+  voiceText.value = ''
 }
 
 function onCancel() {
   loading.value = false
   ElMessage.info('已取消')
+}
+
+// Handle paste — long text → attachment (per settings)
+function onPasteFile(file: File) {
+  // XSender emits pasteFile for pasted files/images
+  // For now, just emit a notice
+  ElMessage.info(`粘贴文件: ${file.name}`)
 }
 
 // Token 估算（粗略）
@@ -52,6 +63,12 @@ function estimateTokens(text: string): number {
 }
 
 const tokenEstimate = computed(() => estimateTokens(inputValue.value))
+
+// Handle voice input
+function onVoiceInput(val: string) {
+  // VoiceInput emits full text including prior content
+  inputValue.value = val
+}
 </script>
 
 <template>
@@ -72,7 +89,17 @@ const tokenEstimate = computed(() => estimateTokens(inputValue.value))
       :trigger-config="triggerConfig"
       @submit="onSubmit"
       @cancel="onCancel"
-    />
+      @paste-file="onPasteFile"
+    >
+      <template #action-list>
+        <div class="action-list">
+          <VoiceInput
+            :model-value="voiceText"
+            @update:model-value="onVoiceInput"
+          />
+        </div>
+      </template>
+    </XSender>
 
     <div class="sender-footer">
       <div class="footer-left">
@@ -101,6 +128,12 @@ const tokenEstimate = computed(() => estimateTokens(inputValue.value))
   right: 8px;
   font-size: 11px;
   color: #9ca3af;
+}
+
+.action-list {
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .sender-footer {

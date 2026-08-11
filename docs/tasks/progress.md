@@ -11,20 +11,20 @@
 | 02 | 本地持久化（IndexedDB） | P0 | ✅ 完成 | `utils/db.ts`, `utils/saveQueue.ts`, `utils/migrations.ts`, `stores/app.ts` |
 | 03 | Provider 管理 | P0 | ✅ 完成 | `views/ProviderView.vue`, `components/ProviderForm.vue` |
 | 04 | Assistant 管理 | P0 | ✅ 完成 | `views/AssistantView.vue`, `components/AssistantForm.vue` |
-| 05 | Topic 管理 | P0 | ✅ 完成 | `stores/app.ts`, `views/ChatView.vue` |
-| 06 | 对话与流式生成 | P0 | ✅ 基础完成 | `views/ChatView.vue`, `components/MessageList.vue` |
-| 07 | 消息渲染（Bubble + XMarkdown） | P0 | ✅ 基础完成 | `components/MessageList.vue` |
+| 05 | Topic 管理 | P0 | ✅ 完成 | `components/TopicList.vue` (Conversations), `stores/app.ts` |
+| 06 | 对话与流式生成 | P0 | ✅ 完成 | `views/ChatView.vue`, `composables/useChatSend.ts`, `api/chat.ts` |
+| 07 | 消息渲染（Bubble + XMarkdown） | P0 | ✅ 完成 | `components/MessageList.vue` (BubbleList+Bubble+MarkdownRenderer) |
 | 08 | 思考过程展示 | P0 | ✅ 完成 | `components/MessageList.vue` (Thinking 组件) |
 | 09 | 输入与发送（XSender） | P0 | ✅ 完成 | `components/MessageSender.vue`, `components/WelcomePrompts.vue` |
 | 10 | 请求层（HookFetch + useSend + useXStream） | P0 | ✅ 完成 | `utils/http.ts`, `api/chat.ts`, `api/types.ts`, `composables/useChatSend.ts` |
 | 11 | 导入（Cherry v5） | P0 | ✅ 完成 | `utils/importer.ts`, `components/ImportDialog.vue` |
 | 12 | 导出（Cherry v5） | P1 | ✅ 完成 | `utils/exporter.ts`, `components/ExportDialog.vue` |
-| 13 | 设置与界面 | P1 | ✅ 基础完成 | `views/SettingsView.vue` |
+| 13 | 设置与界面 | P1 | ✅ 完成 | `views/SettingsView.vue` (11 分区全覆盖) |
 | 14 | 欢迎页与提示 | P1 | ✅ 完成 | `components/WelcomePrompts.vue` |
-| 15 | 附件管理 | P1 | ⬜ 未开始 | — |
-| 16 | 主题系统（ConfigProvider） | P1 | ✅ 基础完成 | `App.vue` |
+| 15 | 附件管理 | P1 | ✅ 完成 | `components/ChatAttachments.vue` (Attachments+FilesCard) |
+| 16 | 主题系统（ConfigProvider） | P1 | ✅ 完成 | `App.vue` (ConfigProvider + themeOverrides + customCss) |
 | 17 | 响应式布局 | P1 | ✅ 完成 | `layouts/DefaultLayout.vue`, `views/ChatView.vue` |
-| 18 | 语音输入 | P2 | ⬜ 未开始 | — |
+| 18 | 语音输入 | P2 | ✅ 完成 | `components/VoiceInput.vue` (useRecord), `components/MessageSender.vue` |
 
 ## 编译状态
 
@@ -62,19 +62,25 @@
 - autoNameTopic（30 字符 + isNameManuallyEdited 保护）
 - ChatView 侧边栏完整 Topic 交互
 
-### Module 06 - 对话与流式 ✅ 基础
+### Module 06 - 对话与流式 ✅
 - 消息创建流程（user → assistant 占位 → 流式更新）
 - blocks 结构（main_text / thinking / error）
-- 状态机（sending → streaming → complete / stopped）
+- 状态机（sending → streaming → complete / stopped / error）
+- **真实 SSE 流接入**：ChatView 调用 `chatApi.chatStream()` + `parseSSEStream()`
+- 6 种 Provider 适配器（openai/anthropic/gemini/azure/mistral/vertexai）
+- 无 API Key 时自动降级为模拟回复
 - 停止生成保留已接收内容
-- metrics 记录
-- 待完成：真实 SSE 流接入（useChatSend 已就绪，待调用）
+- metrics 记录（completion_tokens / time_completion / time_first_token / time_thinking）
+- 重试：删除失败消息后重新发送上一条用户消息
 
-### Module 07 - 消息渲染 ✅ 基础
+### Module 07 - 消息渲染 ✅
 - `src/components/MessageList.vue` — 使用 BubbleList + Bubble 组件
+- **XMarkdown 渲染**：MarkdownRenderer 异步加载，支持 GFM/代码高亮/表格/任务列表
+- enable-animate 流式动画（streaming 状态时自动启用）
+- show-code-block-header + enable-code-line-number（跟随设置）
 - 消息操作：复制、重试
 - token 显示、模型名显示
-- 待完成：XMarkdown 渲染（当前用 v-html）、代码高亮、Mermaid
+- 错误块独立渲染 + 重试按钮
 
 ### Module 08 - 思考过程展示 ✅
 - 使用 Thinking 组件
@@ -102,19 +108,33 @@
 - `src/utils/exporter.ts` — exportToCherryV5() + validateForExport()
 - `src/components/ExportDialog.vue` — API Key 选项 + 概览 + 校验 + 下载
 
-### Module 13 - 设置界面 ✅ 基础
-- 6 个分区：外观、输入、Provider、助手、同步、数据管理
-- 绑定新 Settings 类型
+### Module 13 - 设置界面 ✅
+- 13 个导航项（11 个设置分区 + Provider + 助手）
+- 基础：语言、主题(auto/light/dark)、字号、用户名
+- 话题：显示控制、位置、自动命名
+- 输入：快捷键、Token 估算、粘贴长文本转附件、折叠模式
+- 消息显示：样式、字体、分隔线、Token/模型名/大纲
+- 代码：行号、换行、折叠、编辑器配置、预览主题
+- 数学：引擎选择、单美元符号
+- 翻译：空格触发、确认、提示词、目标语言
+- 导出：10 种格式开关
+- 多模型：消息样式、退格删除、快捷面板
+- 布局：窄模式、导航栏位置、主题色（ElColorPicker）
+- 自定义：CSS 文本框
+- 绑定 `app.settings.*`，更新后自动保存
 
 ### Module 14 - 欢迎页 ✅
 - 空消息时显示 Welcome + Prompts
 - Assistant regularPhrases 展示
 - 点击 prompt 直接发送
 
-### Module 16 - 主题系统 ✅ 基础
-- App.vue ConfigProvider（namespace='elx'）
-- isDark 切换
-- 待完成：themeOverrides 完整配置、customCss、fontSize 动态
+### Module 16 - 主题系统 ✅
+- App.vue ConfigProvider（namespace='elx', applyTo='root'）
+- theme 跟随 settings.theme（light/dark/auto）
+- auto 模式跟随系统 prefers-color-scheme
+- themeOverrides 从 settings.userTheme.colorPrimary 读取
+- customCss 动态注入 <style>
+- applyTheme() 在 init() 时执行
 
 ### Module 17 - 响应式布局 ✅
 - 桌面：rail(68px) + sidebar(276px) + main + inspector(304px)
@@ -124,11 +144,17 @@
 
 ## 未完成模块
 
-### Module 15 - 附件管理 (P1)
-- Attachments + FilesCard 组件
-- 10MB 限制
-- 粘贴长文本转附件
+### Module 15 - 附件管理 ✅
+- `src/components/ChatAttachments.vue` — Attachments 组件 + FilesCard
+- 拖拽上传 + 点击上传
+- before-upload 校验：10MB 限制 + 文件夹过滤
+- httpRequest 本地存储（图片生成 Object URL 预览）
+- delete-card 事件处理 + URL.revokeObjectURL 清理
+- scrollX 滚动模式
 
-### Module 18 - 语音输入 (P2)
-- useRecord hook
-- Web Speech API → useVoiceInput.ts
+### Module 18 - 语音输入 ✅
+- `src/components/VoiceInput.vue` — useRecord hook + Web Speech API
+- `src/components/MessageSender.vue` — 集成 VoiceInput 到 XSender #action-list 插槽
+- start()/stop() 控制 + loading 状态 + 实时文字填充
+- 不支持浏览器自动隐藏 + 麦克风权限错误提示
+- 录音中 pulse 动画
