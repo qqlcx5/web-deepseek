@@ -17,7 +17,10 @@ const filteredTopics = computed(() => {
   if (!q) return list
   return list.filter(topic =>
     topic.name.toLowerCase().includes(q) ||
-    topic.messages.some(m => m.content?.toLowerCase().includes(q))
+    topic.messages.some(m => {
+      const text = m.blocks.find(b => b.type === 'main_text')?.content ?? ''
+      return text.toLowerCase().includes(q)
+    })
   )
 })
 
@@ -68,7 +71,7 @@ function openTopic(topicId: string) {
               <span class="result-time">{{ new Date(topic.updatedAt).toLocaleDateString() }}</span>
             </div>
             <p class="result-preview">
-              {{ topic.messages[0]?.content || '暂无消息，点击进入话题开始对话' }}
+              {{ topic.messages[0]?.blocks.find(b => b.type === 'main_text')?.content || '暂无消息，点击进入话题开始对话' }}
             </p>
             <div class="result-meta">
               <span class="result-tag">Orbit Assistant</span>

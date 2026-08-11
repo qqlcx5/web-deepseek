@@ -24,6 +24,12 @@ function toggleTheme() {
         <RouterLink to="/search" class="rail-btn" title="搜索">
           <i class="i-tabler-search" />
         </RouterLink>
+        <RouterLink to="/providers" class="rail-btn" title="Provider">
+          <i class="i-tabler-plug" />
+        </RouterLink>
+        <RouterLink to="/assistants" class="rail-btn" title="助手">
+          <i class="i-tabler-sparkles" />
+        </RouterLink>
         <RouterLink to="/settings" class="rail-btn" title="设置">
           <i class="i-tabler-settings" />
         </RouterLink>

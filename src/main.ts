@@ -7,11 +7,17 @@ import 'vue-element-plus-x/styles/index.css'
 
 import App from './App.vue'
 import router from './router'
+import { useAppStore } from './stores/app'
 
 const app = createApp(App)
+const pinia = createPinia()
 
-app.use(createPinia())
+app.use(pinia)
 app.use(router)
 app.use(ElementPlus)
 
-app.mount('#app')
+// 初始化本地数据
+const store = useAppStore()
+store.init().finally(() => {
+  app.mount('#app')
+})
