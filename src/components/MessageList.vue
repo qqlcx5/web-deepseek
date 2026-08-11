@@ -3,7 +3,8 @@ import { computed, ref, shallowRef, onMounted, nextTick, watch } from 'vue'
 import { BubbleList, Bubble, Thinking } from 'vue-element-plus-x'
 import { ElMessage } from 'element-plus'
 import { useAppStore } from '@/stores/app'
-import type { ChatMessage } from '@/types'
+import type { MessageView } from '@/stores/app'
+import type { TextBlock, ThinkingBlock, ErrorBlock } from '@/types'
 
 // Async load MarkdownRenderer (per wiki pattern)
 const MarkdownRenderer = shallowRef<any>()
@@ -26,6 +27,23 @@ interface BubbleItem {
   maxWidth: string
 }
 
+function getMainText(msg: MessageView): string {
+  return msg.blocks.find((b): b is TextBlock => b.type === 'main_text')?.content ?? ''
+}
+function getThinking(msg: MessageView): string {
+  return msg.blocks.find((b): b is ThinkingBlock => b.type === 'thinking')?.content ?? ''
+}
+function getThinkingStatus(msg: MessageView): 'start' | 'thinking' | 'end' | 'error' {
+  const block = msg.blocks.find((b): b is ThinkingBlock => b.type === 'thinking')
+  if (!block) return 'end'
+  if (block.status === 'pending') return 'thinking'
+  if (block.status === 'error') return 'error'
+  return 'end'
+}
+function getError(msg: MessageView): string {
+  return msg.blocks.find((b): b is ErrorBlock => b.type === 'error')?.error.message ?? ''
+}
+
 const list = computed<BubbleItem[]>(() => {
   const topic = app.activeTopic
   if (!topic) return []
@@ -35,7 +53,7 @@ const list = computed<BubbleItem[]>(() => {
       key: msg.id,
       placement: isUser ? 'end' as const : 'start' as const,
       content: getMainText(msg),
-      loading: (msg.status === 'streaming' || msg.status === 'sending') && !getMainText(msg),
+      loading: msg.status === 'pending' && !getMainText(msg),
       variant: 'filled' as const,
       maxWidth: isUser ? '78%' : '86%',
     }
@@ -44,38 +62,21 @@ const list = computed<BubbleItem[]>(() => {
 
 const msgMap = computed(() => {
   const topic = app.activeTopic
-  if (!topic) return new Map<string, ChatMessage>()
+  if (!topic) return new Map<string, MessageView>()
   return new Map(topic.messages.map(m => [m.id, m]))
 })
 
-function getMainText(msg: ChatMessage): string {
-  return msg.blocks.find(b => b.type === 'main_text')?.content ?? ''
-}
-function getThinking(msg: ChatMessage): string {
-  return msg.blocks.find(b => b.type === 'thinking')?.content ?? ''
-}
-function getThinkingStatus(msg: ChatMessage): 'start' | 'thinking' | 'end' | 'error' {
-  const block = msg.blocks.find(b => b.type === 'thinking')
-  if (!block) return 'end'
-  if (block.status === 'streaming') return 'thinking'
-  if (block.status === 'error') return 'error'
-  return 'end'
-}
-function getError(msg: ChatMessage): string {
-  return msg.blocks.find(b => b.type === 'error')?.error?.message ?? ''
-}
-
-function copyMessage(msg: ChatMessage) {
+function copyMessage(msg: MessageView) {
   navigator.clipboard.writeText(getMainText(msg))
   ElMessage.success('已复制到剪贴板')
 }
 
-function retryMessage(msg: ChatMessage) {
+const emit = defineEmits<{ retry: [msg: MessageView] }>()
+
+function retryMessage(msg: MessageView) {
   if (msg.role !== 'assistant') return
   emit('retry', msg)
 }
-
-const emit = defineEmits<{ retry: [msg: ChatMessage] }>()
 
 defineExpose({
   stopGeneration() {
@@ -83,9 +84,9 @@ defineExpose({
     const topic = app.activeTopic
     if (!topic) return
     const last = topic.messages[topic.messages.length - 1]
-    if (last?.status === 'streaming') {
-      app.updateMessage(topic.id, last.id, { status: 'stopped' })
-      last.blocks.forEach(b => { if (b.status === 'streaming') b.status = 'success' })
+    if (last?.status === 'pending') {
+      app.updateMessage(topic.id, last.id, { status: 'success' })
+      last.blocks.forEach(b => app.updateBlock(topic.id, last.id, b.id, { status: 'success' }))
     }
     ElMessage.info('生成已停止')
   },
@@ -129,7 +130,7 @@ function formatTime(iso: string): string {
                 v-if="item.content && MarkdownRenderer"
                 :markdown="item.content"
                 :is-dark="app.isDark"
-                :enable-animate="msgMap.get(String(item.key))?.status === 'streaming'"
+                :enable-animate="msgMap.get(String(item.key))?.status === 'pending'"
                 :show-code-block-header="true"
                 :enable-code-line-number="app.settings.codeShowLineNumbers"
               />
@@ -147,7 +148,7 @@ function formatTime(iso: string): string {
             </template>
 
             <!-- Footer: action buttons + tokens -->
-            <template v-if="msgMap.get(String(item.key))!.status === 'complete' || msgMap.get(String(item.key))!.status === 'stopped'" #footer>
+            <template v-if="msgMap.get(String(item.key))!.status === 'success'" #footer>
               <div class="msg-footer">
                 <button class="action-btn" title="复制" @click="copyMessage(msgMap.get(String(item.key))!)">
                   <i class="i-tabler-copy text-xs" />
@@ -158,7 +159,6 @@ function formatTime(iso: string): string {
                 <span v-if="app.settings.showTokens && msgMap.get(String(item.key))!.metrics" class="token-count">
                   {{ msgMap.get(String(item.key))!.metrics!.completion_tokens }} tokens
                 </span>
-                <span v-if="msgMap.get(String(item.key))!.status === 'stopped'" class="stopped-tag">已停止</span>
               </div>
             </template>
           </Bubble>
@@ -185,7 +185,6 @@ function formatTime(iso: string): string {
 .msg-footer { display: flex; align-items: center; gap: 4px; margin-top: 4px; }
 .action-btn { display: flex; align-items: center; justify-content: center; padding: 4px 6px; border-radius: 6px; color: #667085; transition: background 0.1s; &:hover { background: #f3f4f6; } }
 .token-count { margin-left: 8px; font-size: 11px; color: #9ca3af; }
-.stopped-tag { margin-left: 8px; font-size: 11px; color: #f59e0b; }
 
 .error-block { display: flex; align-items: center; gap: 6px; margin-top: 8px; border-radius: 8px; border: 1px solid #fecaca; background: #fef2f2; padding: 8px 12px; font-size: 12px; color: #b91c1c; }
 .retry-link { margin-left: auto; font-weight: 500; text-decoration: underline; color: #5b56d6; }

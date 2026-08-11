@@ -2,7 +2,7 @@
 import { ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useAppStore } from '@/stores/app'
-import type { Settings } from '@/types'
+import type { SettingsModule as Settings } from '@/types'
 
 const app = useAppStore()
 const settingTab = ref('basic')
@@ -445,7 +445,7 @@ function set<K extends SettingKey>(key: K, value: Settings[K]) {
               <div class="model-list">
                 <div v-for="m in app.providers[0]?.models" :key="m.id" class="model-row">
                   <div><div class="model-name">{{ m.name }}</div><div class="model-sub">{{ m.group }}</div></div>
-                  <span :class="m.enabled ? 'badge-success' : 'badge-muted'">{{ m.enabled ? '启用' : '未启用' }}</span>
+                  <span class="badge-success">启用</span>
                 </div>
               </div>
             </div>
@@ -457,7 +457,7 @@ function set<K extends SettingKey>(key: K, value: Settings[K]) {
             <div class="card">
               <div v-for="a in app.assistants" :key="a.id" class="model-row">
                 <div><div class="model-name">{{ a.emoji }} {{ a.name }}</div><div class="model-sub">{{ a.model?.name ?? '未设置模型' }}</div></div>
-                <span :class="a.enabled ? 'badge-success' : 'badge-muted'">{{ a.isDefault ? '默认 · ' : '' }}{{ a.enabled ? '启用' : '未启用' }}</span>
+                <span :class="a.id === app.defaultAssistantId ? 'badge-success' : 'badge-muted'">{{ a.id === app.defaultAssistantId ? '默认 · ' : '' }}启用</span>
               </div>
               <div class="card-footer"><el-button type="primary">添加助手</el-button></div>
             </div>

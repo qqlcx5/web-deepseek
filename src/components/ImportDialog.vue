@@ -3,7 +3,7 @@ import { ref, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useAppStore } from '@/stores/app'
 import { parseCherryV5 } from '@/utils/importer'
-import type { AppData } from '@/types'
+import type { ParseResult } from '@/utils/importer'
 
 const app = useAppStore()
 const props = defineProps<{ visible: boolean }>()
@@ -16,17 +16,18 @@ const visible = computed({
 
 const fileName = ref('')
 const fileContent = ref('')
-const parseResult = ref<{ data?: AppData; warnings: string[]; errors: string[] } | null>(null)
+const parseResult = ref<ParseResult | null>(null)
 const importing = ref(false)
 
 const preview = computed(() => {
   if (!parseResult.value?.data) return null
   const d = parseResult.value.data
+  const persist = d.localStorage['persist:cherry-studio']
   return {
-    providers: d.providers.length,
-    assistants: d.assistants.length,
-    topics: d.topics.length,
-    messages: d.topics.reduce((sum, t) => sum + t.messages.length, 0),
+    providers: persist.llm.providers.length,
+    assistants: persist.assistants.assistants.length + 1,
+    topics: d.indexedDB.topics.length,
+    messages: d.indexedDB.topics.reduce((sum, t) => sum + t.messages.length, 0),
     warnings: parseResult.value.warnings.length,
   }
 })
@@ -68,7 +69,7 @@ function confirmImport() {
   }
   importing.value = true
   try {
-    app.setAppData(parseResult.value.data)
+    app.setCherryData(parseResult.value.data)
     ElMessage.success('导入成功')
     visible.value = false
     reset()

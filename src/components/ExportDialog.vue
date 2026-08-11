@@ -17,16 +17,17 @@ const includeApiKey = ref(false)
 const exporting = ref(false)
 
 const validation = computed(() => {
-  return validateForExport(app.getAppData())
+  return validateForExport(app.getCherryData())
 })
 
 const overview = computed(() => {
-  const d = app.getAppData()
+  const d = app.getCherryData()
+  const persist = d.localStorage['persist:cherry-studio']
   return {
-    providers: d.providers.length,
-    assistants: d.assistants.length,
-    topics: d.topics.length,
-    messages: d.topics.reduce((sum, t) => sum + t.messages.length, 0),
+    providers: persist.llm.providers.length,
+    assistants: persist.assistants.assistants.length + 1,
+    topics: d.indexedDB.topics.length,
+    messages: d.indexedDB.topics.reduce((sum, t) => sum + t.messages.length, 0),
   }
 })
 
@@ -43,7 +44,7 @@ function doExport() {
 
   exporting.value = true
   try {
-    const appData = app.getAppData()
+    const appData = app.getCherryData()
     const json = exportToCherryV5(appData, { includeApiKey: includeApiKey.value })
 
     const now = new Date()

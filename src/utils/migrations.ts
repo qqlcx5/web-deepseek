@@ -1,5 +1,4 @@
 // 版本迁移 — Orbit Chat
-import type { AppData } from '@/types'
 
 interface Migration {
   version: number
@@ -35,7 +34,7 @@ const migrations: Migration[] = [
   },
 ]
 
-export function migrateData(raw: any): AppData {
+export function migrateData(raw: any): any {
   let data = raw
   const currentVersion = data?.version ?? 0
 
@@ -45,8 +44,7 @@ export function migrateData(raw: any): AppData {
     }
   }
 
-  data.version = migrations[migrations.length - 1]?.version ?? 1
-  return data as AppData
+  return data
 }
 
 export function getCurrentVersion(): number {

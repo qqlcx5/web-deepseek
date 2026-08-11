@@ -2,7 +2,7 @@
 import { ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useAppStore } from '@/stores/app'
-import type { Assistant } from '@/types'
+import type { AssistantObject as Assistant } from '@/types'
 import AssistantForm from '@/components/AssistantForm.vue'
 
 const app = useAppStore()
@@ -34,12 +34,13 @@ function handleAssistantSave(data: Partial<Assistant>) {
 
 // ===== 启用/禁用 =====
 function toggleEnabled(a: Assistant) {
-  app.updateAssistant(a.id, { enabled: !a.enabled })
+  // Cherry schema: AssistantObject 无 enabled 字段，启用概念暂不支持
+  void a
 }
 
 // ===== 设为默认 =====
 function handleSetDefault(a: Assistant) {
-  if (a.isDefault) return
+  if (a.id === app.defaultAssistantId) return
   app.setDefaultAssistant(a.id)
   ElMessage.success(`已将「${a.name}」设为默认助手`)
 }

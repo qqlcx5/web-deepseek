@@ -10,7 +10,8 @@ import MessageSender from '@/components/MessageSender.vue'
 import TopicList from '@/components/TopicList.vue'
 import ImportDialog from '@/components/ImportDialog.vue'
 import ExportDialog from '@/components/ExportDialog.vue'
-import type { ChatMessage, MessageBlock } from '@/types'
+import type { MessageBlock } from '@/types'
+import type { MessageView } from '@/stores/app'
 import type { SSEEvent } from '@/api/types'
 
 const app = useAppStore()
@@ -46,60 +47,53 @@ async function onSend(text: string) {
   if (!text?.trim()) return
   if (!app.activeTopic) app.createTopic()
   const topicId = app.activeTopicId
-  const topic = app.activeTopic!
 
-  // 1. Create user message
+  // 1. user message
   const userMsg = app.addMessage(topicId, {
-    role: 'user', status: 'complete',
+    role: 'user', status: 'success',
     blocks: [{ id: crypto.randomUUID(), messageId: '', type: 'main_text', createdAt: new Date().toISOString(), status: 'success', content: text }],
   })
-  if (userMsg.blocks[0]) userMsg.blocks[0].messageId = userMsg.id
+  if (!userMsg) return
   app.autoNameTopic(topicId, text)
 
-  // 2. Create assistant placeholder
-  const thinkingBlock: MessageBlock = {
-    id: crypto.randomUUID(), messageId: '', type: 'thinking',
-    createdAt: new Date().toISOString(), status: 'streaming',
-    content: '', thinking_millsec: 0,
-  }
-  const mainBlock: MessageBlock = {
-    id: crypto.randomUUID(), messageId: '', type: 'main_text',
-    createdAt: new Date().toISOString(), status: 'streaming',
-    content: '',
-  }
+  // 2. assistant placeholder (status: pending)
+  const thinkingBlockId = crypto.randomUUID()
+  const mainBlockId = crypto.randomUUID()
   const assistantMsg = app.addMessage(topicId, {
-    role: 'assistant', status: 'streaming', askId: userMsg.id,
-    blocks: [thinkingBlock, mainBlock],
+    role: 'assistant', status: 'pending', askId: userMsg.id,
+    blocks: [
+      { id: thinkingBlockId, messageId: '', type: 'thinking', createdAt: new Date().toISOString(), status: 'pending', content: '', thinking_millsec: 0 },
+      { id: mainBlockId, messageId: '', type: 'main_text', createdAt: new Date().toISOString(), status: 'pending', content: '' },
+    ],
   })
-  thinkingBlock.messageId = assistantMsg.id
-  mainBlock.messageId = assistantMsg.id
+  if (!assistantMsg) return
+  const assistantMsgId = assistantMsg.id
 
-  // 3. Try real API streaming
+  // 3. provider
   const provider = getActiveProvider()
   if (!provider || !provider.apiKey || provider.apiKey === 'your-api-key') {
-    // Fallback: simulated response
-    simulateResponse(topicId, assistantMsg.id, mainBlock.id, thinkingBlock.id)
+    simulateResponse(topicId, assistantMsgId, mainBlockId)
     return
   }
 
-  // Real streaming
+  // 4. real streaming
   const startTime = Date.now()
   let firstTokenTime = 0
-  let thinkingStartTime = Date.now()
+  const thinkingStartTime = Date.now()
   let contentBuffer = ''
   let thinkingBuffer = ''
 
-  // Build message history for API
-  const apiMessages = topic.messages
-    .filter(m => m.status === 'complete' || m.status === 'stopped')
+  const apiMessages = (app.activeTopic?.messages ?? [])
+    .filter(m => m.status === 'success')
     .map(m => ({
-      role: (m.role === 'assistant' ? 'assistant' : 'user') as 'user' | 'assistant' | 'system' | 'developer',
+      role: (m.role === 'assistant' ? 'assistant' : 'user') as 'user' | 'assistant',
       content: m.blocks.find(b => b.type === 'main_text')?.content ?? '',
     }))
   apiMessages.push({ role: 'user' as const, content: text })
 
-  const assistant = app.activeAssistant!
+  const assistant = app.activeAssistant
   const modelId = assistant.model?.id ?? 'gpt-4o'
+  const aSettings = assistant.settings
 
   try {
     const { chatApi } = await import('@/api/chat')
@@ -107,9 +101,9 @@ async function onSend(text: string) {
       provider,
       model: modelId,
       messages: apiMessages,
-      temperature: assistant.settings.temperature,
-      maxTokens: assistant.settings.enableMaxTokens ? assistant.settings.maxTokens : undefined,
-      topP: assistant.settings.enableTopP ? assistant.settings.topP : undefined,
+      temperature: aSettings?.temperature,
+      maxTokens: aSettings?.enableMaxTokens ? aSettings?.maxTokens : undefined,
+      topP: aSettings?.enableTopP ? aSettings?.topP : undefined,
       stream: true,
     })
 
@@ -119,98 +113,67 @@ async function onSend(text: string) {
         const delta = event.choices?.[0]?.delta
         if (delta?.content) {
           contentBuffer += delta.content
-          app.updateMessage(topicId, assistantMsg.id, {})
-          const msg = app.activeTopic?.messages.find(m => m.id === assistantMsg.id)
-          const mb = msg?.blocks.find(b => b.id === mainBlock.id)
-          if (mb) { mb.content = contentBuffer; mb.status = 'streaming' }
+          app.updateBlock(topicId, assistantMsgId, mainBlockId, { content: contentBuffer, status: 'pending' })
         }
         if (delta?.reasoning_content) {
           thinkingBuffer += delta.reasoning_content
-          const msg = app.activeTopic?.messages.find(m => m.id === assistantMsg.id)
-          const tb = msg?.blocks.find(b => b.id === thinkingBlock.id)
-          if (tb) { tb.content = thinkingBuffer; tb.status = 'streaming' }
+          app.updateBlock(topicId, assistantMsgId, thinkingBlockId, { content: thinkingBuffer, status: 'pending' })
         }
-        if (event.usage) {
-          const msg = app.activeTopic?.messages.find(m => m.id === assistantMsg.id)
-          if (msg) msg.usage = event.usage!
-        }
+        if (event.usage) app.updateMessage(topicId, assistantMsgId, { usage: event.usage })
       },
       onError(error: Error) {
-        const msg = app.activeTopic?.messages.find(m => m.id === assistantMsg.id)
-        if (msg) {
-          msg.status = 'error'
-          msg.blocks.push({
-            id: crypto.randomUUID(), messageId: assistantMsg.id, type: 'error',
-            createdAt: new Date().toISOString(), status: 'error',
-            error: { name: error.name, message: error.message, originalMessage: error.message, stack: error.stack ?? '' },
-          })
-        }
+        app.updateMessage(topicId, assistantMsgId, { status: 'error' })
+        app.addBlock(topicId, assistantMsgId, {
+          id: crypto.randomUUID(), messageId: assistantMsgId, type: 'error',
+          createdAt: new Date().toISOString(), status: 'error',
+          error: { name: error.name, message: error.message, originalMessage: error.message, stack: error.stack ?? '' },
+        })
         ElMessage.error(`请求失败: ${error.message}`)
       },
-      onAbort() {
-        finalizeMessage('stopped')
-      },
-      onFinish() {
-        finalizeMessage('complete')
-      },
+      onAbort() { finalizeMessage('success') },
+      onFinish() { finalizeMessage('success') },
     })
   } catch (e) {
     const error = e instanceof Error ? e : new Error(String(e))
-    const msg = app.activeTopic?.messages.find(m => m.id === assistantMsg.id)
-    if (msg) {
-      msg.status = 'error'
-      msg.blocks.push({
-        id: crypto.randomUUID(), messageId: assistantMsg.id, type: 'error',
-        createdAt: new Date().toISOString(), status: 'error',
-        error: { name: error.name, message: error.message, originalMessage: error.message, stack: error.stack ?? '' },
-      })
-    }
+    app.updateMessage(topicId, assistantMsgId, { status: 'error' })
+    app.addBlock(topicId, assistantMsgId, {
+      id: crypto.randomUUID(), messageId: assistantMsgId, type: 'error',
+      createdAt: new Date().toISOString(), status: 'error',
+      error: { name: error.name, message: error.message, originalMessage: error.message, stack: error.stack ?? '' },
+    })
     ElMessage.error(`请求失败: ${error.message}`)
   }
 
-  function finalizeMessage(status: 'complete' | 'stopped') {
-    const msg = app.activeTopic?.messages.find(m => m.id === assistantMsg.id)
-    if (!msg) return
-    msg.status = status
-    msg.blocks.forEach(b => { if (b.status === 'streaming') b.status = 'success' })
-    const tb = msg.blocks.find(b => b.id === thinkingBlock.id)
-    if (tb) tb.thinking_millsec = Date.now() - thinkingStartTime
-    msg.metrics = {
-      completion_tokens: contentBuffer.length,
-      time_completion_millsec: Date.now() - startTime,
-      time_first_token_millsec: firstTokenTime ? firstTokenTime - startTime : 0,
-      time_thinking_millsec: tb?.thinking_millsec ?? 0,
-    }
+  function finalizeMessage(status: 'success' | 'error') {
+    app.updateBlock(topicId, assistantMsgId, thinkingBlockId, { status: 'success', thinking_millsec: Date.now() - thinkingStartTime })
+    app.updateBlock(topicId, assistantMsgId, mainBlockId, { status: 'success' })
+    app.updateMessage(topicId, assistantMsgId, {
+      status,
+      metrics: {
+        completion_tokens: contentBuffer.length,
+        time_completion_millsec: Date.now() - startTime,
+        time_first_token_millsec: firstTokenTime ? firstTokenTime - startTime : 0,
+        time_thinking_millsec: Date.now() - thinkingStartTime,
+      },
+    })
   }
 }
 
-function simulateResponse(topicId: string, msgId: string, mainBlockId: string, thinkingBlockId: string) {
+function simulateResponse(topicId: string, msgId: string, mainBlockId: string) {
   const startTime = Date.now()
   const reply = '这是 Orbit Chat 的模拟回复。配置 Provider API Key 后将接入真实流式响应。\n\n**功能特点：**\n- 本地优先，数据存于 IndexedDB\n- 多 Provider 支持（OpenAI / Anthropic / Gemini 等）\n- Cherry Studio v5 导入导出\n\n```typescript\nconsole.log("Hello Orbit Chat!")\n```'
 
   let i = 0
   const interval = setInterval(() => {
-    const msg = app.activeTopic?.messages.find(m => m.id === msgId)
-    if (!msg) { clearInterval(interval); return }
-    const mb = msg.blocks.find(b => b.id === mainBlockId)
-    if (!mb) { clearInterval(interval); return }
-
     i += 3
-    mb.content = reply.slice(0, i)
-    mb.status = 'streaming'
-
+    app.updateBlock(topicId, msgId, mainBlockId, { content: reply.slice(0, i), status: 'pending' })
     if (i >= reply.length) {
       clearInterval(interval)
-      mb.content = reply
-      mb.status = 'success'
-      msg.status = 'complete'
-      msg.blocks.forEach(b => { if (b.status === 'streaming') b.status = 'success' })
-      msg.metrics = {
-        completion_tokens: reply.length,
-        time_completion_millsec: Date.now() - startTime,
-        time_first_token_millsec: 100,
-        time_thinking_millsec: 0,
-      }
+      app.updateBlock(topicId, msgId, mainBlockId, { content: reply, status: 'success' })
+      app.updateMessage(topicId, msgId, {
+        status: 'success',
+        metrics: { completion_tokens: reply.length, time_completion_millsec: Date.now() - startTime, time_first_token_millsec: 100, time_thinking_millsec: 0 },
+      })
     }
   }, 30)
 }
@@ -221,17 +184,18 @@ function stopGeneration() {
   messageListRef.value?.stopGeneration()
 }
 
-function onRetry(msg: ChatMessage) {
+function onRetry(msg: MessageView) {
   const topic = app.activeTopic
   if (!topic) return
   const idx = topic.messages.findIndex(m => m.id === msg.id)
-  if (idx >= 0) topic.messages.splice(idx, 1)
-  const prevUserMsg = topic.messages[idx - 1]
+  app.deleteMessage(topic.id, msg.id)
+  const prevUserMsg = idx > 0 ? topic.messages[idx - 1] : undefined
   if (prevUserMsg) onSend(getMainText(prevUserMsg))
 }
 
-function getMainText(msg: ChatMessage): string {
-  return msg.blocks.find(b => b.type === 'main_text')?.content ?? ''
+function getMainText(msg: MessageView): string {
+  const b = msg.blocks.find(x => x.type === 'main_text')
+  return b && 'content' in b ? b.content : ''
 }
 
 window.addEventListener('resize', () => { isMobile.value = window.innerWidth <= 759 })

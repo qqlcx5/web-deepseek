@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, reactive, watch, computed } from 'vue'
 import type { FormInstance, FormRules } from 'element-plus'
-import type { Assistant, ModelRef, AssistantSettings } from '@/types'
+import type { AssistantObject as Assistant, ModelRef, AssistantSettings } from '@/types'
 import { useAppStore } from '@/stores/app'
 
 const props = defineProps<{
@@ -57,7 +57,7 @@ const groupedModels = computed(() => {
     .map(p => ({
       providerName: p.name,
       providerId: p.id,
-      models: p.models.filter(m => m.enabled),
+      models: p.models,
     }))
     .filter(g => g.models.length > 0)
 })
@@ -79,7 +79,7 @@ watch(() => props.visible, (v) => {
     form.emoji = props.assistant.emoji
     form.description = props.assistant.description ?? ''
     form.prompt = props.assistant.prompt
-    form.enabled = props.assistant.enabled
+    form.enabled = true
     form.modelId = props.assistant.model?.id ?? ''
     form.defaultModelId = props.assistant.defaultModel?.id ?? ''
     form.settings = { ...defaultSettings, ...props.assistant.settings }
@@ -116,14 +116,11 @@ async function handleSubmit() {
       emoji: form.emoji,
       description: form.description,
       prompt: form.prompt,
-      enabled: form.enabled,
       model,
       defaultModel,
       settings: { ...form.settings },
       enableWebSearch: form.enableWebSearch,
       knowledgeRecognition: form.knowledgeRecognition,
-      mcpServers,
-      regularPhrases,
     })
   })
 }

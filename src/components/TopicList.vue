@@ -3,14 +3,13 @@ import { computed, h } from 'vue'
 import { Conversations } from 'vue-element-plus-x'
 import type { ConversationMenuCommand } from 'vue-element-plus-x/types/Conversations'
 import { useAppStore } from '@/stores/app'
-import type { Topic } from '@/types'
 
 const app = useAppStore()
 const emit = defineEmits<{ select: [id: string] }>()
 
 // Map topics to Conversations items format
 const items = computed(() => {
-  return app.sortedTopics.map((topic: Topic) => ({
+  return app.sortedTopics.map((topic) => ({
     key: topic.id,
     label: topic.name,
   }))

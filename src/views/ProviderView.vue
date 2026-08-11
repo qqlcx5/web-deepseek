@@ -53,20 +53,20 @@ function toggleProviderEnabled(p: Provider) {
 // ===== 模型 CRUD =====
 const modelDialogVisible = ref(false)
 const modelEditingProvider = ref<Provider | undefined>()
-const modelForm = ref({ id: '', name: '', group: '', enabled: true })
+const modelForm = ref({ id: '', name: '', group: '' })
 const isModelEdit = ref(false)
 
 function openCreateModel(p: Provider) {
   modelEditingProvider.value = p
   isModelEdit.value = false
-  modelForm.value = { id: '', name: '', group: p.name, enabled: true }
+  modelForm.value = { id: '', name: '', group: p.name }
   modelDialogVisible.value = true
 }
 
 function openEditModel(p: Provider, m: ModelInfo) {
   modelEditingProvider.value = p
   isModelEdit.value = true
-  modelForm.value = { id: m.id, name: m.name, group: m.group, enabled: m.enabled }
+  modelForm.value = { id: m.id, name: m.name, group: m.group }
   modelDialogVisible.value = true
 }
 
@@ -81,7 +81,6 @@ function handleModelSave() {
     app.updateModel(p.id, modelForm.value.id, {
       name: modelForm.value.name,
       group: modelForm.value.group,
-      enabled: modelForm.value.enabled,
     })
     ElMessage.success('模型已更新')
   } else {
@@ -89,7 +88,6 @@ function handleModelSave() {
       id: modelForm.value.id,
       name: modelForm.value.name,
       group: modelForm.value.group,
-      enabled: modelForm.value.enabled,
     })
     ElMessage.success('模型已创建')
   }
@@ -108,8 +106,8 @@ async function handleDeleteModel(p: Provider, m: ModelInfo) {
   }
 }
 
-function toggleModelEnabled(p: Provider, m: ModelInfo) {
-  app.updateModel(p.id, m.id, { enabled: !m.enabled })
+function toggleModelEnabled(_p: Provider, _m: ModelInfo) {
+  // Cherry schema: ModelInfo 无 enabled 字段，模型启用概念暂不支持
 }
 </script>
 
@@ -195,9 +193,6 @@ function toggleModelEnabled(p: Provider, m: ModelInfo) {
         </ElFormItem>
         <ElFormItem label="分组">
           <ElInput v-model="modelForm.group" placeholder="例如 OpenAI" />
-        </ElFormItem>
-        <ElFormItem label="启用">
-          <ElSwitch v-model="modelForm.enabled" />
         </ElFormItem>
       </ElForm>
       <template #footer>
