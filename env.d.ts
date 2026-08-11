@@ -1,1 +1,1 @@
-declare module 'x-markdown-vue/style'
+/// <reference types="vite/client" />
