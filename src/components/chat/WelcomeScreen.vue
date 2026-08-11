@@ -1,7 +1,6 @@
 <script setup lang="ts">
-import { h } from 'vue'
 import { Welcome, Prompts } from 'vue-element-plus-x'
-import type { PromptsItemsProps } from 'vue-element-plus-x/types/components/Prompts/types'
+import type { PromptsItemsProps } from 'vue-element-plus-x/types/Prompts'
 import { Icon } from '@iconify/vue'
 
 interface Props {

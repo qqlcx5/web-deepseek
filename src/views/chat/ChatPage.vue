@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
+import { useRoute } from 'vue-router'
 import { useChatStore } from '@/stores/chat'
 import { useUiStore } from '@/stores/ui'
+import { useSearchStore } from '@/stores/search'
 import { useKeyboardShortcuts } from '@/composables/useKeyboard'
 import { ConfigProvider } from 'vue-element-plus-x'
 import { Icon } from '@iconify/vue'
@@ -23,9 +25,13 @@ import SettingsView from '@/components/chat/SettingsView.vue'
 
 type AppView = 'chat' | 'search' | 'settings'
 
+const route = useRoute()
 const store = useChatStore()
 const uiStore = useUiStore()
-const activeView = ref<AppView>('chat')
+const searchStore = useSearchStore()
+
+const defaultView = (route.meta?.defaultView as AppView | undefined) ?? 'chat'
+const activeView = ref<AppView>(defaultView)
 const { handleKeydown } = useKeyboardShortcuts(uiStore, { newConversation: store.newConversation })
 const handleResize = () => uiStore.handleResize()
 
@@ -36,11 +42,15 @@ function switchView(view: AppView) {
   }
 }
 
-onMounted(() => {
+onMounted(async () => {
   handleResize()
   window.addEventListener('resize', handleResize)
   document.addEventListener('keydown', handleKeydown)
-  store.initApp()
+  await store.initApp()
+  // Rebuild search index after app data loads
+  if (!searchStore.indexReady) {
+    searchStore.rebuild()
+  }
 })
 
 onUnmounted(() => {
@@ -92,7 +102,14 @@ onUnmounted(() => {
             <ChatComposer />
           </main>
 
-          <!-- Inspector (xl+ only) -->
+          <!-- Inspector backdrop (tablet/mobile drawer) -->
+          <div
+            v-if="uiStore.inspectorOpen"
+            class="inspector-backdrop"
+            @click="uiStore.closeInspector()"
+          />
+
+          <!-- Inspector (xl+ only, drawer on tablet/mobile) -->
           <ChatInspector />
         </template>
 
@@ -121,9 +138,13 @@ onUnmounted(() => {
           <Icon icon="tabler:search" :size="19" />
           <span>搜索</span>
         </button>
-        <button :class="{ active: activeView === 'settings' }" @click="switchView('settings')">
-          <Icon icon="tabler:settings" :size="19" />
-          <span>设置</span>
+        <button @click="uiStore.sidebarOpen = !uiStore.sidebarOpen">
+          <Icon icon="tabler:folder" :size="19" />
+          <span>文件</span>
+        </button>
+        <button @click="uiStore.sidebarOpen = !uiStore.sidebarOpen">
+          <Icon icon="tabler:history" :size="19" />
+          <span>会话</span>
         </button>
       </nav>
 
@@ -194,7 +215,19 @@ onUnmounted(() => {
 /* ═══ Mobile-only elements (hidden on desktop) ═══ */
 .mobile-header { display: none; }
 .mobile-backdrop { display: none; }
+.inspector-backdrop { display: none; }
 .mobile-nav { display: none; }
+
+/* ═══ Responsive: tablet (761–1180px) — inspector drawer backdrop ═══ */
+@media (max-width: 1180px) {
+  .inspector-backdrop {
+    position: fixed;
+    z-index: 50;
+    inset: 0;
+    display: block;
+    background: color-mix(in srgb, var(--text) 26%, transparent);
+  }
+}
 
 /* ═══ Responsive: mobile layout (≤760px) ═══ */
 @media (max-width: 760px) {
@@ -274,7 +307,7 @@ onUnmounted(() => {
     z-index: 30;
     display: grid;
     height: 58px;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(4, 1fr);
     align-items: center;
     background: var(--surface);
     border-top: 1px solid var(--line);

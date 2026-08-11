@@ -25,28 +25,28 @@
 
 ## 子任务
 
-- [ ] 定义统一接口。
+- [x] 定义统一接口。
   - 输入：ai-reader `RemoteTransport`。
   - 输出：`interface RemoteTransport { test(); hasData(); putText(path,text); getText(path); remove(path); listFiles() }` + `createS3Remote(cfg)` / `createWebDAVRemote(cfg)` 工厂。
   - 完成判定：两种远端同一接口；basePath 规范化（默认 `/orbit-chat`）。
 
-- [ ] S3 实现（aws4fetch）。
+- [x] S3 实现（aws4fetch）。
   - 输入：`S3Config { endpoint, region, bucket, accessKeyId, secretAccessKey, basePath, forcePathStyle }`。
   - 输出：`new AwsClient({accessKeyId,secretAccessKey,region,service:'s3'})`；test 用 HEAD bucket + ListObjectsV2 prefix；putText/getText/remove/listFiles（解析 ListObjectsV2 XML，含 continuationToken 分页）。
   - 完成判定：MinIO/AWS 可读写列删；路径风格可切换。
 
-- [ ] WebDAV 实现（webdav）。
+- [x] WebDAV 实现（webdav）。
   - 输入：`WebDAVConfig { url, username, password, basePath }`。
   - 输出：`createClient(url,{username,password})`；test 用 exists + 建目录（recursive）；putText/getText/remove/listFiles（getDirectoryContents 过滤目录）。
   - 完成判定：常见 WebDAV（坚果云/Nextcloud）可读写列删。
 
-- [ ] CORS 代理与配置存储。
+- [x] CORS 代理与配置存储。
   - 输入：开发/生产环境。
   - 输出：vite.config 增可选代理规则（按 endpoint 透传）；配置写 `settings.remote.s3` / `settings.remote.webdav`，默认导出剔除密钥。
   - 完成判定：开发环境能连通；配置持久；导出 JSON 不含 accessKeyId/secretAccessKey/password。
 
 ## 验收
 
-- [ ] S3 与 WebDAV 均可 test/put/get/list/remove（手动连一个真实端点）。
-- [ ] 配置持久且默认导出无密钥。
-- [ ] `npm run type-check` 通过。
+- [x] S3 与 WebDAV 均可 test/put/get/list/remove（手动连一个真实端点）。
+- [x] 配置持久且默认导出无密钥。
+- [x] `npm run type-check` 通过。

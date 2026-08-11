@@ -100,6 +100,24 @@ function handlePasteFile(firstFile: File, fileList: FileList) {
   if (files.length) store.addFiles(files)
 }
 
+function handlePaste(e: ClipboardEvent) {
+  const clipboardData = e.clipboardData
+  if (!clipboardData) return
+  // Only intercept text-only paste (no files/images)
+  if (clipboardData.files.length > 0) return
+  const text = clipboardData.getData('text/plain')
+  if (!text) return
+
+  const threshold = appStore.settings?.pasteLongTextThreshold ?? 500
+  const enabled = appStore.settings?.pasteLongTextAsFile ?? false
+  if (!enabled || text.length <= threshold) return
+
+  e.preventDefault()
+  e.stopPropagation()
+  const file = new File([text], `pasted-${Date.now()}.txt`, { type: 'text/plain' })
+  store.addFiles([file])
+}
+
 function handleFiles(e: Event) {
   const input = e.target as HTMLInputElement
   if (input.files?.length) {
@@ -129,6 +147,7 @@ defineExpose({ senderRef })
       :clearable="false"
       :tip-config="false"
       class="composer-sender"
+      @paste.capture="handlePaste"
       @change="handleChange"
       @submit="handleSubmit"
       @paste-file="handlePasteFile"
@@ -172,6 +191,8 @@ defineExpose({ senderRef })
         <button
           v-if="loading || store.generating"
           class="send-btn stop"
+          title="停止生成"
+          aria-label="停止生成"
           @click="abort"
         >
           <Icon icon="tabler:square" />
@@ -180,6 +201,8 @@ defineExpose({ senderRef })
           v-else
           class="send-btn"
           :disabled="!store.canSend"
+          title="发送消息"
+          aria-label="发送消息"
           @click="handleSubmit"
         >
           <Icon icon="tabler:arrow-up" />
@@ -295,7 +318,7 @@ defineExpose({ senderRef })
 .icon-btn :deep(svg) { width: 16px; height: 16px; }
 
 @media (max-width: 760px) {
-  .composer-wrap { padding: 7px 8px max(7px, env(safe-area-inset-bottom)); }
+  .composer-wrap { padding: 7px 8px max(7px, calc(env(safe-area-inset-bottom) + 8px)); }
   .composer-sender :deep(.elx-x-sender) { border-radius: 7px; }
   .composer-hint { display: none; }
   .token-estimate { display: none; }

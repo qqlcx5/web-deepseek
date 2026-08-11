@@ -1,34 +1,17 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import type { ChatMessage } from '@/types'
+import type { AIProvider, ChatInput, StreamCallbacks } from '@/services/ai/types'
 
-const api = vi.hoisted(() => ({ chatStream: vi.fn() }))
+const mockProvider: AIProvider = {
+  chat: vi.fn(),
+  streamChat: vi.fn(),
+  testConnection: vi.fn(),
+}
 
-vi.mock('@/api/chat-api', () => ({
-  chatApi: { chatStream: api.chatStream },
+vi.mock('@/services/ai/factory', () => ({
+  createProvider: vi.fn(() => mockProvider),
 }))
-
-function streamOf(...events: string[]): ReadableStream<Uint8Array> {
-  const encoder = new TextEncoder()
-  return new ReadableStream({
-    start(controller) {
-      for (const event of events) controller.enqueue(encoder.encode(event))
-      controller.close()
-    },
-  })
-}
-
-function assistantMessage(): ChatMessage {
-  return {
-    id: 'message-1',
-    topicId: 'topic-1',
-    role: 'assistant',
-    content: '',
-    createdAt: '2025-01-01T00:00:00.000Z',
-    status: 'sending',
-    blocks: [],
-  }
-}
 
 beforeAll(() => {
   Object.assign(globalThis, {
@@ -42,7 +25,7 @@ beforeAll(() => {
 describe('chat streaming state machine', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
-    api.chatStream.mockReset()
+    vi.clearAllMocks()
   })
 
   async function configureStore() {
@@ -62,15 +45,24 @@ describe('chat streaming state machine', () => {
     return useChatStore()
   }
 
-  it('writes content, thinking, usage and successful block statuses from SSE', async () => {
-    api.chatStream.mockResolvedValue(streamOf(
-      'data: {"reasoning_content":"plan"}\n',
-      'data: {"content":"answer"}\n',
-      'data: {"usage":{"prompt_tokens":3,"completion_tokens":5,"total_tokens":8}}\n',
-      'data: [DONE]\n',
-    ))
+  it('writes content, thinking, usage and successful block statuses', async () => {
+    mockProvider.streamChat.mockImplementation(
+      async (_input: ChatInput, callbacks: StreamCallbacks) => {
+        callbacks.onToken('plan', 'thinking')
+        callbacks.onToken('answer', 'text')
+        callbacks.onDone({ prompt_tokens: 3, completion_tokens: 5, total_tokens: 8 })
+      },
+    )
     const store = await configureStore()
-    const message = assistantMessage()
+    const message: ChatMessage = {
+      id: 'message-1',
+      topicId: 'topic-1',
+      role: 'assistant',
+      content: '',
+      createdAt: '2025-01-01T00:00:00.000Z',
+      status: 'sending',
+      blocks: [],
+    }
 
     await store.streamChat(message, [])
 
@@ -86,17 +78,23 @@ describe('chat streaming state machine', () => {
 
   it('preserves generated content when the request is cancelled', async () => {
     const abortError = Object.assign(new Error('cancelled'), { name: 'AbortError' })
-    api.chatStream.mockRejectedValue(abortError)
+    mockProvider.streamChat.mockRejectedValue(abortError)
     const store = await configureStore()
-    const message = assistantMessage()
-    message.content = 'partial answer'
-    message.blocks.push({
-      id: 'block-1',
-      type: 'main_text',
+    const message: ChatMessage = {
+      id: 'message-1',
+      topicId: 'topic-1',
+      role: 'assistant',
       content: 'partial answer',
-      status: 'streaming',
-      createdAt: message.createdAt,
-    })
+      createdAt: '2025-01-01T00:00:00.000Z',
+      status: 'sending',
+      blocks: [{
+        id: 'block-1',
+        type: 'main_text',
+        content: 'partial answer',
+        status: 'streaming',
+        createdAt: '2025-01-01T00:00:00.000Z',
+      }],
+    }
 
     await store.streamChat(message, [])
 
@@ -106,9 +104,21 @@ describe('chat streaming state machine', () => {
   })
 
   it('adds an error block for failed requests', async () => {
-    api.chatStream.mockRejectedValue(new Error('401 unauthorized'))
+    mockProvider.streamChat.mockImplementation(
+      async (_input: ChatInput, callbacks: StreamCallbacks) => {
+        callbacks.onError(new Error('401 unauthorized'))
+      },
+    )
     const store = await configureStore()
-    const message = assistantMessage()
+    const message: ChatMessage = {
+      id: 'message-1',
+      topicId: 'topic-1',
+      role: 'assistant',
+      content: '',
+      createdAt: '2025-01-01T00:00:00.000Z',
+      status: 'sending',
+      blocks: [],
+    }
 
     await store.streamChat(message, [])
 

@@ -15,27 +15,27 @@
 
 ## 子任务
 
-- [ ] 定义统一适配器接口。
+- [x] 定义统一适配器接口。
   - 输入：`Model`、`messages`、`signal`。
   - 输出：`AIProvider { chat(); streamChat(input, {onToken,onDone,onError}); testConnection() }`，`StreamCallbacks` 与 `ChatInput` 类型对齐 ai-reader。
   - 完成判定：三条 provider 实现同一接口；chat-service 只依赖接口。
 
-- [ ] 重构 OpenAI-compatible 适配器（沿用现有 hook-fetch/chatApi）。
+- [x] 重构 OpenAI-compatible 适配器（沿用现有 hook-fetch/chatApi）。
   - 输入：现有 `chatApi.chatStream`。
   - 输出：`openai-compatible.ts` 包装为 `AIProvider`；`shared.ts` 抽 `normalizeBaseUrl`/`fetchWithTimeout`/`anySignal`。
   - 完成判定：现有 DeepSeek/OpenAI 流式行为不回归。
 
-- [ ] 实现 Anthropic 适配器。
+- [x] 实现 Anthropic 适配器。
   - 输入：`x-api-key` + `anthropic-version`；Messages API；SSE `content_block_delta`。
   - 输出：`anthropic.ts` 实现 `chat/streamChat/testConnection`；reasoning 走 `thinking` block；正文走 `text` delta。
   - 完成判定：Claude 模型可流式对话；思考内容入 thinking block。
 
-- [ ] 实现 Ollama 适配器。
+- [x] 实现 Ollama 适配器。
   - 输入：`/api/chat` NDJSON 流式、`/api/tags` 连通测试。
   - 输出：`ollama.ts` 实现 NDJSON 逐行解析、`testConnection` 用 `/api/tags`。
   - 完成判定：本地 Ollama 可对话与测试连通。
 
-- [ ] 工厂路由 + 测试连接服务。
+- [x] 工厂路由 + 测试连接服务。
   - 输入：`provider.providerType`。
   - 输出：`factory.ts` 的 `createProvider(provider)` 按类型返回单例适配器；`test-connection.service.ts` 10s 超时返回 `{ok,latency,error}`。
   - 完成判定：ProviderSettings 里"测试连接"按钮按类型路由；结果写回 `model.lastTestStatus`。
@@ -47,6 +47,6 @@
 
 ## 验收
 
-- [ ] 三种 provider 均可流式对话（手动）。
-- [ ] 测试连接按钮返回成功/失败/延迟。
-- [ ] `npm run type-check` 通过。
+- [x] 三种 provider 均可流式对话（手动）。
+- [x] 测试连接按钮返回成功/失败/延迟。
+- [x] `npm run type-check` 通过。

@@ -16,7 +16,7 @@
 
 ## 子任务
 
-- [ ] 让流式增量命中 Vue 响应式。
+- [x] 让流式增量命中 Vue 响应式。
   - 输入：`assistantMessage`（store 内代理对象引用）、SSE delta。
   - 输出：`streamAssistantMessage` 不再持有原始对象，改为通过回调 `onDelta(mutator)` 由 store 在响应式对象上执行写入；或 store 传入 `messages.value` 中已代理的引用并在 chat-service 内用 `mutate message.xxx`（确保是代理引用）。
   - 完成判定：流式过程中 `message.content` / `blocks[].content` 增量能驱动 `watch` 和 `Bubble` 重渲染；控制台无"原始对象被直接修改"的旁路。
@@ -36,15 +36,15 @@
   - 输出：`sending → streaming → complete|stopped|error`；停止保留已收内容；失败总是产出可渲染的 `error` block；重生成不重复创建占位消息。
   - 完成判定：与 PRD 4.5 / M07 约定一致，UI（M11）能据此显示"已停止/失败/生成中"。
 
-- [ ] 保留流式节流持久化。
+- [x] 保留流式节流持久化。
   - 输入：连续 token delta。
   - 输出：开始、约每 400ms、结束时落 IndexedDB（`appStore.updateMessage`）。
   - 完成判定：不对每个字符写库；停止/失败时最后一次状态已落库。
 
 ## 验收
 
-- [ ] 发送一条消息，能看到正文逐字出现（修复"没有流"）。
-- [ ] 停止生成后正文与思考内容保留，状态为已停止。
-- [ ] 断开/错误的 Provider 发送，显示红色 error block 并可重生成。
-- [ ] 流式期间 IndexedDB 写入频率受控（手动观察或单测）。
-- [ ] `npm run type-check` 通过；现有 `tests/` 中流式相关用例通过。
+- [x] 发送一条消息，能看到正文逐字出现（修复"没有流"）。
+- [x] 停止生成后正文与思考内容保留，状态为已停止。
+- [x] 断开/错误的 Provider 发送，显示红色 error block 并可重生成。
+- [x] 流式期间 IndexedDB 写入频率受控（手动观察或单测）。
+- [x] `npm run type-check` 通过；现有 `tests/` 中流式相关用例通过。

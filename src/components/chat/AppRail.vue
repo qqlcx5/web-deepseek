@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { useUiStore } from '@/stores/ui'
 import { useAppStore } from '@/stores/app'
 import { useTheme } from '@/composables/useTheme'
 import { Icon } from '@iconify/vue'
@@ -9,7 +8,6 @@ export type AppView = 'chat' | 'search' | 'settings'
 const props = defineProps<{ view: AppView }>()
 const emit = defineEmits<{ 'update:view': [value: AppView] }>()
 
-const uiStore = useUiStore()
 const appStore = useAppStore()
 const { isDark, setTheme } = useTheme()
 

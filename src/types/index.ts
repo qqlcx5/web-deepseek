@@ -1,6 +1,10 @@
 // ─── Orbit Chat Core Data Contract ────────────────────────────────────────────
 // Runtime state and IndexedDB persistence use these normalized entities only.
 
+import type { S3Config, WebDAVConfig } from '@/services/remote/types'
+
+export type ProviderType = 'openai-compatible' | 'anthropic' | 'ollama'
+
 export interface Provider {
   id: string
   name: string
@@ -10,6 +14,8 @@ export interface Provider {
   enabled: boolean
   isSystem?: boolean
   apiVersion?: string
+  /** Discriminator for the AI provider adapter. Defaults to 'openai-compatible'. */
+  providerType?: ProviderType
 }
 
 export interface ModelInfo {
@@ -35,6 +41,8 @@ export interface Assistant {
   temperature?: number
   topP?: number
   maxTokens?: number
+  contextCount?: number
+  streamOutput?: boolean
   enableWebSearch?: boolean
   createdAt: string
   updatedAt: string
@@ -73,6 +81,7 @@ export interface Attachment {
   size: string
   type?: string
   url?: string
+  fileSize?: number
 }
 
 export interface TokenUsage {
@@ -138,6 +147,20 @@ export interface Settings {
   showInputEstimatedTokens: boolean
   pasteLongTextAsFile: boolean
   pasteLongTextThreshold: number
+  context: {
+    maxContextTokens: number
+    maxHistoryMessages: number
+    includeUrl: boolean
+    includeTitle: boolean
+    includeCapturedAt: boolean
+  }
+  remote: {
+    s3: S3Config
+    webdav: WebDAVConfig
+  }
+  remoteType: 'none' | 's3' | 'webdav'
+  webdavAutoSync: boolean
+  webdavAutoSyncInterval: number
   renderInputMessageAsMarkdown: boolean
   mathEngine: 'katex' | 'mathjax'
   targetLanguage: string

@@ -52,6 +52,26 @@ export default defineConfig(({ mode }) => {
           changeOrigin: true,
           rewrite: (path) => path.replace(new RegExp(`^${env.VITE_AI_API_BASE || '/ai-api'}`), ''),
         },
+        // S3 proxy — set VITE_S3_PROXY_TARGET to an S3 endpoint to enable
+        ...(env.VITE_S3_PROXY_TARGET
+          ? {
+              '/s3-proxy': {
+                target: env.VITE_S3_PROXY_TARGET,
+                changeOrigin: true,
+                rewrite: (path) => path.replace(/^\/s3-proxy/, ''),
+              },
+            }
+          : {}),
+        // WebDAV proxy — set VITE_WEBDAV_PROXY_TARGET to a WebDAV endpoint to enable
+        ...(env.VITE_WEBDAV_PROXY_TARGET
+          ? {
+              '/dav-proxy': {
+                target: env.VITE_WEBDAV_PROXY_TARGET,
+                changeOrigin: true,
+                rewrite: (path) => path.replace(/^\/dav-proxy/, ''),
+              },
+            }
+          : {}),
       },
     },
     optimizeDeps: {

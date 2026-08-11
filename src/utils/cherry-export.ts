@@ -260,6 +260,26 @@ export function buildExportJSON(data: AppData, options: ExportOptions = {}): Che
           showMessageDivider: data.settings.showMessageDivider,
           enableTopicNaming: data.settings.enableTopicNaming,
           pinTopicsToTop: data.settings.pinTopicsToTop,
+          // Remote: strip secrets, keep only non-sensitive fields
+          remote: {
+            s3: data.settings.remote.s3.endpoint || data.settings.remote.webdav.url
+              ? {
+                  endpoint: data.settings.remote.s3.endpoint,
+                  region: data.settings.remote.s3.region,
+                  bucket: data.settings.remote.s3.bucket,
+                  basePath: data.settings.remote.s3.basePath,
+                  forcePathStyle: data.settings.remote.s3.forcePathStyle,
+                  // accessKeyId and secretAccessKey stripped
+                }
+              : undefined,
+            webdav: data.settings.remote.webdav.url
+              ? {
+                  url: data.settings.remote.webdav.url,
+                  basePath: data.settings.remote.webdav.basePath,
+                  // username and password stripped
+                }
+              : undefined,
+          },
         },
       },
     },

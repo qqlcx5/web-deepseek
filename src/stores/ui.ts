@@ -66,6 +66,14 @@ export const useUiStore = defineStore('ui', () => {
 
   const selectedModel = ref<Model | null>(null)
 
+  // Whether the currently selected model's provider is ready for chat
+  const selectedModelReady = computed(() => {
+    if (!selectedModel.value) return false
+    const provider = appStore.providers.find(p => p.id === selectedModel.value!.providerId)
+    if (!provider || !provider.enabled) return false
+    return Boolean(provider.apiKey)
+  })
+
   // Initialize selectedModel from first enabled provider's first model
   function initSelectedModel() {
     if (selectedModel.value) return
@@ -233,7 +241,7 @@ export const useUiStore = defineStore('ui', () => {
     online, saving, modal, toast, undoAction,
     // Input State
     commandQuery, nearBottom, promptDraft,
-    selectedModel,
+    selectedModel, selectedModelReady,
     // Getters
     filteredCommands, filteredCommandChats,
     // Actions

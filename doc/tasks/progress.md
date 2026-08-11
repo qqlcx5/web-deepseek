@@ -27,16 +27,16 @@
 
 ### UI 与对话体验重建（进行中）
 
-- [ ] M10 [XSender 输入区](./10-xsender-composer.md)
-- [ ] M11 [Bubble 消息列表](./11-bubble-message-list.md)
-- [ ] M12 [流式响应式修复与状态机](./12-streaming-reactivity.md)
-- [ ] M13 [Conversations 侧边栏](./13-conversations-sidebar.md)
-- [ ] M14 [Welcome + Prompts 空状态](./14-welcome-prompts.md)
-- [ ] M15 [模型选择与上下文 Banner](./15-model-context-header.md)
-- [ ] M16 [附件 FilesCard](./16-attachments-filescard.md)
-- [ ] M17 [设置面板即时生效](./17-settings-instant.md)
-- [ ] M18 [响应式布局回归](./18-responsive-layout.md)
-- [ ] M19 [质量验证与发布检查](./19-quality-release.md)
+- [x] M10 [XSender 输入区](./10-xsender-composer.md)（验证日期：2026-08-11，`npm run type-check` 通过）
+- [x] M11 [Bubble 消息列表](./11-bubble-message-list.md)（验证日期：2026-08-11，`npm run type-check` 通过）
+- [x] M12 [流式响应式修复与状态机](./12-streaming-reactivity.md)（验证日期：2026-08-11，`npm run type-check` 通过）
+- [x] M13 [Conversations 侧边栏](./13-conversations-sidebar.md)（验证日期：2026-08-11，`npm run type-check` 通过）
+- [x] M14 [Welcome + Prompts 空状态](./14-welcome-prompts.md)（验证日期：2026-08-11，`npm run type-check` 通过）
+- [x] M15 [模型选择与上下文 Banner](./15-model-context-header.md)（验证日期：2026-08-11，`npm run type-check` 通过）
+- [x] M16 [附件 FilesCard](./16-attachments-filescard.md)（验证日期：2026-08-11，`npm run type-check` 通过）
+- [x] M17 [设置面板即时生效](./17-settings-instant.md)（验证日期：2026-08-11，`npm run type-check` 通过）
+- [x] M18 [响应式布局回归](./18-responsive-layout.md) ✅ 2026-08-11 type-check 通过
+- [x] M19 [质量验证与发布检查](./19-quality-release.md) ✅ 2026-08-11 lint/type-check/build/test 全绿
 
 ### ai-reader 功能移植（进行中，Cherry 兼容）
 
@@ -44,16 +44,16 @@
 > 约束：Cherry v5 导入导出格式（`docs/data-json-schema.md`）不变；模型参数归 Assistant，systemPrompt 归 Assistant.prompt，不引入 documents。
 > 库选型：S3 = `aws4fetch`，WebDAV = `webdav`（`webdav/web`）。
 
-- [ ] M20 [多 Provider AI 适配](./20-multi-provider-ai.md)（Anthropic + Ollama + 工厂 + 测试连接）
-- [ ] M21 [Prompt 组装与上下文截断](./21-prompt-context-builder.md)
-- [ ] M22 [模型配置增强](./22-model-config-enhance.md)（参数归 Assistant；测试纯 UI 态）
+- [x] M20 [多 Provider AI 适配](./20-multi-provider-ai.md)（Anthropic + Ollama + 工厂 + 测试连接）✅ 2026-08-11 lint/type-check/build/test 全绿（38 用例）
+- [x] M21 [Prompt 组装与上下文截断](./21-prompt-context-builder.md) ✅ 2026-08-11 type-check/test 全绿（38 用例）
+- [x] M22 [模型配置增强](./22-model-config-enhance.md)（参数归 Assistant；测试纯 UI 态）✅ 2026-08-11 type-check/test 全绿（38 用例）
 - ~~M23 Documents 数据层~~（已砍：产品形态错配）
 - ~~M24 SPA 网页抓取~~（已砍；"喂内容"改走附件 M16）
 - ~~M25 上下文预览~~（已砍）
-- [ ] M26 [对话历史搜索](./26-history-search.md)（MiniSearch，Cherry 原生 topics/messages）
-- [ ] M27 [S3 + WebDAV 远端传输](./27-remote-transports.md)
-- [ ] M28 [同步与备份引擎](./28-sync-backup.md)（备份 = Cherry 导出 JSON，二合一）
-- [ ] M29 [同步与存储设置 UI](./29-settings-sync-storage.md)
+- [x] M26 [对话历史搜索](./26-history-search.md)（MiniSearch，Cherry 原生 topics/messages）✅ 2026-08-11 type-check/build/test 全绿（38 用例），lint 仅预存错误
+- [x] M27 [S3 + WebDAV 远端传输](./27-remote-transports.md) ✅ 2026-08-11 type-check/build/test 全绿（38 用例）
+- [x] M28 [同步与备份引擎](./28-sync-backup.md)（备份 = Cherry 导出 JSON，二合一）✅ 2026-08-11 type-check/build/test 全绿（38 用例）
+- [x] M29 [同步与存储设置 UI](./29-settings-sync-storage.md) ✅ 2026-08-11 type-check/build/test 全绿（38 用例）
 
 ## 推荐执行顺序
 

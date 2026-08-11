@@ -46,6 +46,10 @@ function startNew() {
     isDefault: false,
     emoji: '🤖',
     temperature: 0.7,
+    topP: 1.0,
+    maxTokens: 4096,
+    contextCount: 10,
+    streamOutput: true,
     createdAt,
     updatedAt: createdAt,
   }
@@ -71,6 +75,10 @@ function saveEdit() {
       prompt: editingAssistant.value.prompt,
       model: editingAssistant.value.model,
       temperature: editingAssistant.value.temperature,
+      topP: editingAssistant.value.topP,
+      maxTokens: editingAssistant.value.maxTokens,
+      contextCount: editingAssistant.value.contextCount,
+      streamOutput: editingAssistant.value.streamOutput,
       enableWebSearch: editingAssistant.value.enableWebSearch,
     })
     uiStore.showToast('助手已更新')
@@ -161,6 +169,7 @@ function close() {
               <div class="assistant-name">{{ assistant.name }}</div>
               <div class="assistant-meta">
                 {{ assistant.model || '默认模型' }}
+                <span v-if="assistant.contextCount"> · {{ assistant.contextCount }} 轮</span>
                 <span v-if="assistant.enableWebSearch"> · 🔍 联网</span>
                 <span v-if="assistant.isDefault"> · 默认</span>
               </div>
@@ -235,6 +244,40 @@ function close() {
                   :show-input-controls="false"
                   style="width: 100%;"
                 />
+              </el-form-item>
+              <el-form-item label="Top P: {{ editingAssistant!.topP ?? 1.0 }}">
+                <el-slider
+                  v-model="editingAssistant!.topP"
+                  :min="0"
+                  :max="1"
+                  :step="0.05"
+                  show-input
+                  :show-input-controls="false"
+                  style="width: 100%;"
+                />
+              </el-form-item>
+              <el-form-item label="Max Tokens">
+                <el-input-number
+                  v-model="editingAssistant!.maxTokens"
+                  :min="1"
+                  :max="131072"
+                  :step="256"
+                  style="width: 100%;"
+                />
+              </el-form-item>
+              <el-form-item label="上下文轮数">
+                <el-input-number
+                  v-model="editingAssistant!.contextCount"
+                  :min="0"
+                  :max="100"
+                  style="width: 100%;"
+                />
+              </el-form-item>
+              <el-form-item>
+                <div class="toggle-row">
+                  <span>启用流式输出</span>
+                  <el-switch v-model="editingAssistant!.streamOutput" />
+                </div>
               </el-form-item>
               <el-form-item>
                 <div class="toggle-row">

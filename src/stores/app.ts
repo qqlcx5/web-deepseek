@@ -7,6 +7,29 @@ import { loadAppData, saveAppData } from '@/utils/db'
 import { APP_DATA_VERSION, DEFAULT_SETTINGS, importFromFile, mergeAppData, type ImportReport } from '@/utils/data-import'
 import { buildExportJSON, downloadJson, validateReferences, type ExportOptions, type ValidationResult } from '@/utils/cherry-export'
 
+// ── Sync metadata (localStorage, not part of AppData / Cherry export) ──────
+
+const SYNC_META_KEY = 'orbit-sync-meta'
+
+interface SyncMeta {
+  lastSyncAt: number
+}
+
+function readSyncMeta(): SyncMeta {
+  try {
+    const raw = localStorage.getItem(SYNC_META_KEY)
+    if (raw) {
+      const parsed = JSON.parse(raw)
+      return { lastSyncAt: typeof parsed.lastSyncAt === 'number' ? parsed.lastSyncAt : 0 }
+    }
+  } catch { /* ignore corrupt data */ }
+  return { lastSyncAt: 0 }
+}
+
+function writeSyncMeta(meta: SyncMeta): void {
+  localStorage.setItem(SYNC_META_KEY, JSON.stringify(meta))
+}
+
 function now(): string {
   return new Date().toISOString()
 }
@@ -346,16 +369,25 @@ export const useAppStore = defineStore('app', () => {
     return validation
   }
 
+  const syncMeta = readSyncMeta()
+  const lastSyncAt = ref<number>(syncMeta.lastSyncAt)
+
+  function updateLastSyncAt(timestamp: number = Date.now()) {
+    lastSyncAt.value = timestamp
+    writeSyncMeta({ lastSyncAt: timestamp })
+  }
+
   return {
     providers, assistants, topics, settings,
     loaded, saving, saveError, dataVersion,
+    lastSyncAt, updateLastSyncAt,
     defaultAssistant, sortedTopics,
     topicById, addTopic, deleteTopic, renameTopic, togglePin,
     addMessage, updateMessage, clearMessages,
     addProvider, updateProvider, removeProvider, assistantUsingModel,
     addAssistant, updateAssistant, removeAssistant, topicCountByAssistant,
     updateSettings,
-    init, save,
+    init, save, buildData,
     importData, exportData,
   }
 })

@@ -1,12 +1,22 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { useChatStore } from '@/stores/chat'
+import { useAppStore } from '@/stores/app'
 import { useUiStore } from '@/stores/ui'
 import { Icon } from '@iconify/vue'
 import { Conversations } from 'vue-element-plus-x'
-import type { ConversationItem, ConversationMenuCommand } from 'vue-element-plus-x/types/components/Conversations/types'
+import { ElMessageBox } from 'element-plus'
+import type { ConversationItem, ConversationMenuCommand } from 'vue-element-plus-x/types/Conversations'
+import type { Chat } from '@/types'
+
+interface ChatConversationItem extends ConversationItem {
+  id: string
+  data: Chat
+  updatedAt: string
+}
 
 const store = useChatStore()
+const appStore = useAppStore()
 const uiStore = useUiStore()
 const fileInput = ref<HTMLInputElement | null>(null)
 const renamingId = ref<string | null>(null)
@@ -25,8 +35,9 @@ const conversationItems = computed<ConversationItem[]>(() =>
   store.chats.map(chat => ({
     id: chat.id,
     label: chat.title,
-    group: chat.pinned ? '置顶' : '最近',
+    group: appStore.settings.pinTopicsToTop && chat.pinned ? '置顶' : '最近',
     data: chat,
+    updatedAt: chat.updatedAt,
   })),
 )
 
@@ -34,30 +45,47 @@ const conversationItems = computed<ConversationItem[]>(() =>
 const activeId = computed(() => store.activeChatId ?? '')
 
 function handleChange(item: ConversationItem) {
-  const id = (item as any).id as string
+  const id = (item as ChatConversationItem).id
   if (id) store.openConversation(id)
 }
 
 // Menu: pin/unpin, rename, clear messages, delete
 function handleMenuCommand(command: ConversationMenuCommand, item: ConversationItem) {
-  const chat = (item as any).data ?? item
-  const id = (chat as any).id as string
+  const ci = item as ChatConversationItem
+  const chat = ci.data
+  const id = chat?.id ?? ci.id
   if (!id) return
 
   switch (command) {
     case 'pin':
-      store.togglePin?.(id)
+      store.togglePin(id)
       break
     case 'rename':
       renamingId.value = id
-      renameValue.value = (chat as any).title ?? (item as any).label ?? ''
+      renameValue.value = chat?.title ?? ci.label ?? ''
       break
     case 'clear':
-      store.clearConversation?.(id)
+      ElMessageBox.confirm('确定要清空此对话的所有消息吗？', '清空消息', {
+        confirmButtonText: '清空',
+        cancelButtonText: '取消',
+        type: 'warning',
+      }).then(() => {
+        store.clearConversation(id)
+      }).catch(() => {})
       break
-    case 'delete':
-      store.deleteConversation(id)
+    case 'delete': {
+      const doDelete = () => store.deleteConversation(id)
+      if (appStore.settings.confirmDeleteMessage) {
+        ElMessageBox.confirm('确定要删除此对话吗？删除后不可恢复。', '删除对话', {
+          confirmButtonText: '删除',
+          cancelButtonText: '取消',
+          type: 'warning',
+        }).then(doDelete).catch(() => {})
+      } else {
+        doDelete()
+      }
       break
+    }
   }
 }
 
@@ -68,8 +96,7 @@ function confirmRename() {
   renamingId.value = null
 }
 
-// Whether clearConversation exists on store
-const hasClearConversation = computed(() => typeof store.clearConversation === 'function')
+
 </script>
 
 <template>
@@ -92,17 +119,17 @@ const hasClearConversation = computed(() => typeof store.clearConversation === '
       >
         <Icon icon="tabler:layout-sidebar-left-collapse" />
       </button>
-      <button class="icon-btn mobile-only" @click="uiStore.sidebarOpen = false">
+      <button class="icon-btn mobile-only" @click="uiStore.sidebarOpen = false" title="关闭菜单" aria-label="关闭菜单">
         <Icon icon="tabler:x" />
       </button>
     </div>
 
     <div class="sidebar-actions">
-      <button class="primary new-chat" @click="store.newConversation()">
+      <button class="primary new-chat" @click="store.newConversation()" title="新建对话" aria-label="新建对话">
         <Icon icon="tabler:edit" width="15" />
         新建对话
       </button>
-      <button class="search-trigger" @click="uiStore.modal = 'command'">
+      <button class="search-trigger" @click="uiStore.modal = 'command'" title="搜索或执行命令" aria-label="搜索或执行命令">
         <Icon icon="tabler:search" />
         搜索或执行命令
         <span class="shortcut">⌘ K</span>
@@ -207,11 +234,7 @@ const hasClearConversation = computed(() => typeof store.clearConversation === '
               <Icon icon="tabler:edit" width="13" />
               重命名
             </button>
-            <button
-              v-if="hasClearConversation"
-              class="menu-item"
-              @click="handleMenuCommand('clear', item); handleOpen(false)"
-            >
+            <button class="menu-item" @click="handleMenuCommand('clear', item); handleOpen(false)">
               <Icon icon="tabler:eraser" width="13" />
               清空消息
             </button>

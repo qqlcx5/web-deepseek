@@ -74,7 +74,7 @@ function toggleAppTheme() {
     >
       <Icon icon="tabler:layout-sidebar-left-expand" />
     </button>
-    <button class="icon-btn mobile-only" @click="uiStore.sidebarOpen = true">
+    <button class="icon-btn mobile-only" @click="uiStore.sidebarOpen = true" title="打开菜单" aria-label="打开菜单">
       <Icon icon="tabler:menu" />
     </button>
 
@@ -107,7 +107,7 @@ function toggleAppTheme() {
       </div>
     </div>
 
-    <button class="model-button" @click="uiStore.modal = 'model'">
+    <button class="model-button" @click="uiStore.modal = 'model'" title="选择模型" aria-label="选择模型">
       <Icon icon="tabler:sparkles" width="14" />
       <span>{{ uiStore.selectedModel?.name }}</span>
       <Icon icon="tabler:chevron-down" width="13" />

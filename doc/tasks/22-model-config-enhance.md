@@ -18,27 +18,27 @@
 
 ## 子任务
 
-- [ ] Provider 类型字段。
+- [x] Provider 类型字段。
   - 输入：现有 `Provider`。
   - 输出：新增可选 `providerType: 'openai-compatible'|'anthropic'|'ollama'`，默认 `openai-compatible`；ProviderSettings 编辑表单提供类型选择。
   - 完成判定：旧数据默认 openai-compatible；M20 工厂按此路由。
 
-- [ ] Assistant 参数补全（Cherry 归属）。
+- [x] Assistant 参数补全（Cherry 归属）。
   - 输入：现有 `Assistant`（已有 temperature/topP/maxTokens）。
   - 输出：补 `contextCount?`（上下文轮数）、`streamOutput?`（流式开关）；AssistantSettings 表单展示并编辑 prompt + 全部参数。
   - 完成判定：参数编辑后持久化；刷新恢复；M21 builder 读 Assistant 参数。
 
-- [ ] systemPrompt 优先级。
+- [x] systemPrompt 优先级。
   - 输入：`assistant.prompt`、全局（可选）。
   - 输出：解析顺序 assistant.prompt > 全局 > 不发 system role；为空则不注入。
   - 完成判定：切换 Assistant 后新请求用新 prompt；历史消息不受影响。
 
-- [ ] 连接测试（纯 UI 态）。
+- [x] 连接测试（纯 UI 态）。
   - 输入：M20 `testConnection(model, provider)`。
   - 输出：模型卡显示测试按钮 + 状态灯（灰/testing/绿/红）+ 延时/错误；状态存组件/localStorage，**不写 AppData、不进 Cherry 导出**。
   - 完成判定：测试结果即时可见；刷新后状态重置为 untested（可接受）。
 
-- [ ] 校验与引用保护。
+- [x] 校验与引用保护。
   - 输入：temperature∈[0,2]、contextCount≥0；删除被 Assistant 使用的模型/Provider。
   - 输出：表单校验；删除引用时阻止并提示 Assistant 名称。
   - 完成判定：非法值不可保存；无静默失效引用。
@@ -51,7 +51,7 @@
 
 ## 验收
 
-- [ ] 可在 Assistant 上配置 systemPrompt 与全部模型参数。
-- [ ] 连接测试状态可见（不持久化）。
-- [ ] Cherry 导入导出闭环：Assistant 参数与模型身份无损往返。
-- [ ] `npm run type-check` 通过。
+- [x] 可在 Assistant 上配置 systemPrompt 与全部模型参数。
+- [x] 连接测试状态可见（不持久化）。
+- [x] Cherry 导入导出闭环：Assistant 参数与模型身份无损往返。
+- [x] `npm run type-check` 通过。

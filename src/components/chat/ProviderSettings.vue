@@ -1,12 +1,54 @@
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useAppStore } from '@/stores/app'
 import { useUiStore } from '@/stores/ui'
 import { Icon } from '@iconify/vue'
+import { testProviderConnection } from '@/services/ai/test-connection.service'
 import type { Provider } from '@/types'
+import type { ProviderType } from '@/services/ai/types'
 
 const appStore = useAppStore()
 const uiStore = useUiStore()
+
+// ─── Connection Test State (pure UI, persisted in localStorage) ───────────────
+interface TestStatusEntry {
+  ok: boolean
+  latency: number
+  error?: string
+  testedAt: number
+}
+
+const LS_KEY = 'orbit-chat:connection-test-status'
+
+let testStatuses: Record<string, TestStatusEntry> = {}
+try {
+  const raw = localStorage.getItem(LS_KEY)
+  if (raw) testStatuses = JSON.parse(raw)
+} catch { /* empty */ }
+
+function persistTestStatuses() {
+  localStorage.setItem(LS_KEY, JSON.stringify(testStatuses))
+}
+
+function statusKey(providerId: string, modelId: string): string {
+  return `${providerId}::${modelId}`
+}
+
+function getTestStatus(providerId: string, modelId: string): TestStatusEntry | undefined {
+  return testStatuses[statusKey(providerId, modelId)]
+}
+
+function setTestStatus(providerId: string, modelId: string, entry: TestStatusEntry) {
+  testStatuses[statusKey(providerId, modelId)] = entry
+  persistTestStatuses()
+}
+
+function clearTestStatus(providerId: string, modelId: string) {
+  delete testStatuses[statusKey(providerId, modelId)]
+  persistTestStatuses()
+}
+
+const testingModels = ref(new Set<string>())
 
 const searchQuery = ref('')
 const expandedId = ref<string | null>(null)
@@ -112,9 +154,41 @@ function startNewProvider() {
     apiKey: '',
     models: [],
     enabled: true,
+    providerType: 'openai-compatible',
   }
   showNewProvider.value = true
   providerNameError.value = ''
+}
+
+async function testModelConnection(providerId: string, modelId: string) {
+  const provider = appStore.providers.find(p => p.id === providerId)
+  if (!provider) return
+
+  const key = statusKey(providerId, modelId)
+  testingModels.value.add(key)
+
+  try {
+    const result = await testProviderConnection({
+      providerType: provider.providerType,
+      apiHost: provider.apiHost,
+      apiKey: provider.apiKey ?? '',
+    })
+    setTestStatus(providerId, modelId, {
+      ok: result.ok,
+      latency: result.latency,
+      error: result.error,
+      testedAt: Date.now(),
+    })
+  } catch (e) {
+    setTestStatus(providerId, modelId, {
+      ok: false,
+      latency: 0,
+      error: (e as Error).message || '未知错误',
+      testedAt: Date.now(),
+    })
+  } finally {
+    testingModels.value.delete(key)
+  }
 }
 
 function saveNewProvider() {
@@ -180,6 +254,13 @@ watch(searchQuery, () => {
       </el-form-item>
       <el-form-item label="API Key">
         <el-input v-model="newProvider.apiKey" type="password" show-password placeholder="sk-..." />
+      </el-form-item>
+      <el-form-item label="Provider 类型">
+        <el-select v-model="newProvider.providerType" style="width: 100%;">
+          <el-option value="openai-compatible" label="OpenAI 兼容（默认）" />
+          <el-option value="anthropic" label="Anthropic" />
+          <el-option value="ollama" label="Ollama" />
+        </el-select>
       </el-form-item>
       <el-form-item v-if="providerNameError">
         <el-text type="danger">{{ providerNameError }}</el-text>
@@ -304,10 +385,17 @@ watch(searchQuery, () => {
               <el-input v-model="editingProvider!.name" />
             </el-form-item>
             <el-form-item label="API Host">
-              <el-input v-model="editingProvider!.apiHost" placeholder="https://api.example.com" />
+              <el-input v-model="editingProvider!.apiHost" :placeholder="editingProvider!.providerType === 'ollama' ? 'http://127.0.0.1:11434' : 'https://api.example.com'" />
             </el-form-item>
-            <el-form-item label="API Key">
+            <el-form-item label="API Key" v-if="editingProvider!.providerType !== 'ollama'">
               <el-input v-model="editingProvider!.apiKey" type="password" show-password placeholder="sk-..." />
+            </el-form-item>
+            <el-form-item label="Provider 类型">
+              <el-select v-model="editingProvider!.providerType" style="width: 100%;">
+                <el-option value="openai-compatible" label="OpenAI 兼容（默认）" />
+                <el-option value="anthropic" label="Anthropic" />
+                <el-option value="ollama" label="Ollama" />
+              </el-select>
             </el-form-item>
           </el-form>
 
@@ -328,10 +416,26 @@ watch(searchQuery, () => {
                   <span class="model-name">{{ model.name }}</span>
                   <span class="model-id">{{ model.id }}</span>
                   <el-tag v-if="model.group" size="small" effect="plain">{{ model.group }}</el-tag>
+                  <template v-if="getTestStatus(editingProvider!.id, model.id)">
+                    <span v-if="getTestStatus(editingProvider!.id, model.id)!.ok" class="test-status-ok">已连接 ({{ getTestStatus(editingProvider!.id, model.id)!.latency }}ms)</span>
+                    <span v-else class="test-status-error" :title="getTestStatus(editingProvider!.id, model.id)!.error">
+                      连接失败: {{ getTestStatus(editingProvider!.id, model.id)!.error?.slice(0, 40) }}
+                    </span>
+                  </template>
                 </div>
-                <el-button text circle size="small" type="danger" @click="removeModel(model.id)">
-                  <Icon icon="tabler:trash" width="13" />
-                </el-button>
+                <div class="model-row-actions">
+                  <el-button
+                    text circle size="small"
+                    :loading="testingModels.has(statusKey(editingProvider!.id, model.id))"
+                    @click="testModelConnection(editingProvider!.id, model.id)"
+                    title="测试连接"
+                  >
+                    <Icon icon="tabler:plug-connected" width="13" />
+                  </el-button>
+                  <el-button text circle size="small" type="danger" @click="removeModel(model.id)">
+                    <Icon icon="tabler:trash" width="13" />
+                  </el-button>
+                </div>
               </div>
               <el-empty v-if="editingProvider!.models.length === 0" description="暂无模型" :image-size="40" />
             </div>
@@ -494,6 +598,25 @@ watch(searchQuery, () => {
   font-size: 11px;
   color: var(--el-text-color-secondary);
   font-family: ui-monospace, monospace;
+}
+
+.model-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.test-status-ok {
+  font-size: 11px;
+  color: var(--el-color-success);
+  margin-left: 4px;
+}
+.test-status-error {
+  font-size: 11px;
+  color: var(--el-color-danger);
+  margin-left: 4px;
+  cursor: help;
 }
 
 .edit-actions {

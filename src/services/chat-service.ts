@@ -1,23 +1,29 @@
 // ─── Chat Streaming Service ───────────────────────────────────────────────────
 // Owns the streaming lifecycle: request, SSE parse, message mutation, status.
-// Pure-ish: takes explicit deps, delegates message mutation to the store via
-// onDelta so writes land on the Vue reactive proxy. No Vue, no Pinia.
+// Uses the unified AIProvider factory so chat-service remains provider-agnostic.
 
 import type { ChatMessage, MessageBlock, Model, Provider, TokenUsage } from '@/types'
-import { chatApi, type ChatRequestParams } from '@/api/chat-api'
-import { consumeSSEStream } from '@/utils/sse'
+import { createProvider } from '@/services/ai/factory'
+import type { StreamCallbacks } from '@/services/ai/types'
+import { buildPrompt } from '@/services/prompt/builder'
 
 export interface StreamDeps {
   /** Conversation context used to build the request body. */
   context: ChatMessage[]
   /** Resolved model for this request. */
   model: Model
-  /** Resolved provider (optional override of apiHost/apiKey). */
+  /** Resolved provider (optional override of apiHost/apiKey + providerType). */
   provider: Provider | undefined
   /** Abort signal from the owning store. */
   signal: AbortSignal
   /** Topic id, passed back through onPersist. Omitted in headless/unit runs. */
   topicId?: string
+  /** System prompt from the current Assistant (no hardcoded identity). */
+  systemPrompt?: string
+  /** Max context tokens budget (default: model.contextLength). */
+  maxContextTokens?: number
+  /** Max history message pairs to keep. */
+  maxHistoryMessages?: number
   /**
    * Called for every delta so the store can mutate the **reactive proxy**
    * version of the assistant message. The mutator receives the message
@@ -64,40 +70,55 @@ function mutateBlock(
   })
 }
 
-interface StreamDelta {
-  content?: string
-  reasoning_content?: string
-  usage?: TokenUsage
-}
-
 /**
  * Stream a chat completion, delegating all message mutations to the store via
  * `onDelta` so they land on the Vue reactive proxy.
  *
- * Sets the message's status/blocks/content/reasoningContent/usage/error as the
- * stream progresses, calls `onPersist` (throttled to every 400ms) so the store
- * can save progress, and resolves once the stream is done, aborted, or failed.
+ * Uses the unified AIProvider factory to route to the correct adapter
+ * (OpenAI-compatible, Anthropic, or Ollama) based on provider.providerType.
  */
 export async function streamAssistantMessage(deps: StreamDeps): Promise<void> {
-  const { context, model, provider, signal, topicId, onDelta, onPersist, onErrorToast } = deps
+  const { context, model, provider, signal, topicId, systemPrompt, maxContextTokens, maxHistoryMessages, onDelta, onPersist, onErrorToast } = deps
 
   // State machine: sending → streaming
   onDelta(msg => { msg.status = 'streaming'; msg.loading = true; msg.model = model.name })
 
-  const params: ChatRequestParams = {
-    messages: context
-      .filter(message => message.content && (message.status === 'complete' || message.status === 'stopped'))
-      .map(message => ({ role: message.role, content: message.content })),
-    model: model.id,
-    signal,
-    ...(provider?.apiHost ? { provider: { apiHost: provider.apiHost, apiKey: provider.apiKey } } : {}),
-  }
+  // Resolve provider config: use provider if given, otherwise create a default
+  // openai-compatible adapter from env config.
+  const providerAdapter = provider
+    ? createProvider({
+        providerType: provider.providerType ?? 'openai-compatible',
+        apiHost: provider.apiHost,
+        apiKey: provider.apiKey ?? '',
+      })
+    : createProvider({
+        providerType: 'openai-compatible',
+        apiHost: import.meta.env.VITE_AI_API_BASE || '/ai-api',
+        apiKey: import.meta.env.VITE_AI_API_KEY || '',
+      })
+
+  // Build the request messages via PromptBuilder — no hardcoded AI identity.
+  // systemPrompt comes from the Assistant; contextText (documents) is empty
+  // until M23 lands. History is derived from the completed conversation context.
+  const history = context
+    .filter(message => message.content && (message.status === 'complete' || message.status === 'stopped'))
+    .map(message => ({ role: message.role as 'user' | 'assistant', content: message.content }))
+
+  // The last message (current user input) is extracted from the filtered
+  // context and excluded from history; the builder will inject it separately.
+  const userInput = history.pop()?.content ?? ''
+  const { messages } = buildPrompt({
+    systemPrompt,
+    contextText: '',
+    history,
+    userInput,
+    tokenBudget: maxContextTokens ?? model.contextLength,
+    maxHistoryMessages,
+  })
 
   let lastPersistAt = 0
   const maybePersist = () => {
     if (topicId && Date.now() - lastPersistAt > 400) {
-      // Read the current message state through onDelta (sync) for persistence.
-      // We use a synchronous read via a closure variable.
       let snapshot: ChatMessage | undefined
       onDelta(msg => { snapshot = msg })
       if (snapshot) onPersist(topicId, snapshot)
@@ -105,56 +126,30 @@ export async function streamAssistantMessage(deps: StreamDeps): Promise<void> {
     }
   }
 
-  try {
-    const stream = await chatApi.chatStream(params)
-
-    await consumeSSEStream(stream, (data) => {
-      if (data === '[DONE]') return
-      try {
-        const delta = JSON.parse(data) as StreamDelta
-        if (delta.reasoning_content) {
-          onDelta(msg => {
-            msg.reasoningContent = (msg.reasoningContent ?? '') + delta.reasoning_content
-          })
-          mutateBlock(onDelta, 'thinking', block => { block.content += delta.reasoning_content })
-        }
-        if (delta.content) {
-          onDelta(msg => { msg.content += delta.content })
-          mutateBlock(onDelta, 'main_text', block => { block.content += delta.content })
-        }
-        if (delta.usage) {
-          onDelta(msg => { msg.usage = delta.usage })
-        }
-      }
-      catch {
-        // Ignore malformed event frames and keep consuming the stream.
+  const callbacks: StreamCallbacks = {
+    onToken(token: string, type?: 'text' | 'thinking') {
+      if (type === 'thinking') {
+        onDelta(msg => {
+          msg.reasoningContent = (msg.reasoningContent ?? '') + token
+        })
+        mutateBlock(onDelta, 'thinking', block => { block.content += token })
+      } else {
+        onDelta(msg => { msg.content += token })
+        mutateBlock(onDelta, 'main_text', block => { block.content += token })
       }
       maybePersist()
-    })
-
-    // State machine: streaming → complete
-    onDelta(msg => {
-      for (const block of msg.blocks) {
-        if (block.status === 'streaming') block.status = 'success'
-      }
-      msg.status = 'complete'
-    })
-  }
-  catch (error) {
-    if ((error as Error).name === 'AbortError') {
-      // State machine: streaming → stopped (preserve accumulated content)
+    },
+    onDone(usage?: TokenUsage) {
       onDelta(msg => {
-        msg.status = 'stopped'
         for (const block of msg.blocks) {
           if (block.status === 'streaming') block.status = 'success'
         }
+        msg.status = 'complete'
+        if (usage) msg.usage = usage
       })
-    }
-    else {
-      const detail = error instanceof Error ? error.message : String(error)
-      const isApiError = typeof (error as { status?: unknown }).status === 'number'
-      const prefix = isApiError ? '请求失败' : '请求出错'
-      // State machine: streaming → error
+    },
+    onError(error: Error) {
+      const detail = error.message
       onDelta(msg => {
         msg.status = 'error'
         msg.error = detail
@@ -166,12 +161,41 @@ export async function streamAssistantMessage(deps: StreamDeps): Promise<void> {
           createdAt: now(),
         })
       })
-      onErrorToast(`${prefix}: ${detail}`)
-    }
+      onErrorToast(`请求出错: ${detail}`)
+    },
   }
-  finally {
+
+  try {
+    await providerAdapter.streamChat(
+      { model: model.id, messages, signal },
+      callbacks,
+    )
+  } catch (error) {
+    if ((error as Error).name === 'AbortError') {
+      onDelta(msg => {
+        msg.status = 'stopped'
+        for (const block of msg.blocks) {
+          if (block.status === 'streaming') block.status = 'success'
+        }
+      })
+    } else {
+      const detail = error instanceof Error ? error.message : String(error)
+      onDelta(msg => {
+        msg.status = 'error'
+        msg.error = detail
+        msg.blocks.push({
+          id: createId('block-error'),
+          type: 'error',
+          content: detail,
+          status: 'error',
+          createdAt: now(),
+        })
+      })
+      onErrorToast(`请求出错: ${detail}`)
+    }
+  } finally {
     onDelta(msg => { msg.loading = false })
-    // Final persist: read snapshot through onDelta
+    // Final persist
     if (topicId) {
       let snapshot: ChatMessage | undefined
       onDelta(msg => { snapshot = msg })

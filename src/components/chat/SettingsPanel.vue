@@ -1,11 +1,13 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
-import { ElMessage } from 'element-plus'
+import { computed } from 'vue'
 import { useAppStore } from '@/stores/app'
 import { useUiStore } from '@/stores/ui'
 import { useTheme } from '@/composables/useTheme'
 import { Icon } from '@iconify/vue'
 import type { Settings } from '@/types'
+import StorageSettings from '@/components/settings/StorageSettings.vue'
+import SyncPanel from '@/components/settings/SyncPanel.vue'
+import DataManager from '@/components/settings/DataManager.vue'
 
 const appStore = useAppStore()
 const uiStore = useUiStore()
@@ -309,45 +311,6 @@ function updateSetting(key: keyof Settings, value: unknown) {
   }
 }
 
-// ── Data management: import / export with feedback ────────────────────────────
-const importing = ref(false)
-
-function handleExport() {
-  const result = appStore.exportData()
-  if (result.ok) {
-    ElMessage.success('数据已导出')
-  } else {
-    ElMessage.warning(`导出校验失败：${result.errors.join('；')}`)
-  }
-}
-
-function handleImport() {
-  const input = document.createElement('input')
-  input.type = 'file'
-  input.accept = '.json'
-  input.onchange = async () => {
-    const file = input.files?.[0]
-    if (!file) return
-    importing.value = true
-    try {
-      const result = await appStore.importData(file)
-      if (result.ok) {
-        const r = result.report
-        ElMessage.success(
-          `导入成功：${r.providers ?? 0} 个 Provider，${r.assistants ?? 0} 个 Assistant，${r.topics ?? 0} 个话题`,
-        )
-      } else {
-        ElMessage.error(`导入失败：${result.error}`)
-      }
-    } catch {
-      ElMessage.error('导入失败：文件格式错误')
-    } finally {
-      importing.value = false
-    }
-  }
-  input.click()
-}
-
 function close() {
   uiStore.modal = ''
 }
@@ -439,7 +402,7 @@ function close() {
               :max="item.max ?? 20"
               :step="item.step ?? 1"
               style="width: 120px;"
-              @change="(val: number) => updateSetting(item.key, val)"
+              @change="(val: number | number[]) => updateSetting(item.key, Array.isArray(val) ? val[0] : val)"
             />
             <span class="slider-value">{{ settings[item.key] }}px</span>
           </div>
@@ -470,23 +433,25 @@ function close() {
         </div>
       </div>
 
+      <!-- Sync & Storage -->
+      <div class="setting-group">
+        <div class="section-title">
+          <Icon icon="tabler:cloud-cog" width="15" />
+          同步与存储
+        </div>
+        <p class="group-desc">远端存储配置与数据同步</p>
+        <StorageSettings />
+        <SyncPanel style="margin-top: 10px;" />
+      </div>
+
       <!-- Data management -->
       <div class="setting-group">
         <div class="section-title">
           <Icon icon="tabler:database" width="15" />
           数据管理
         </div>
-        <p class="group-desc">导入、导出本地数据</p>
-        <div class="data-actions">
-          <el-button size="small" @click="handleExport">
-            <Icon icon="tabler:download" width="14" style="margin-right: 4px;" />
-            导出数据
-          </el-button>
-          <el-button size="small" :loading="importing" @click="handleImport">
-            <Icon icon="tabler:upload" width="14" style="margin-right: 4px;" />
-            导入数据
-          </el-button>
-        </div>
+        <p class="group-desc">导入导出与索引维护</p>
+        <DataManager />
       </div>
     </div>
   </el-drawer>

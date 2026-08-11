@@ -25,6 +25,7 @@ import type {
   CherryTopicRef,
 } from '@/types/cherry-data'
 import { parseDataJSON } from './cherry-parser'
+import { DEFAULT_S3_CONFIG, DEFAULT_WEBDAV_CONFIG } from '@/services/remote/types'
 
 export const APP_DATA_VERSION = 2
 
@@ -63,6 +64,20 @@ export const DEFAULT_SETTINGS: Settings = {
   showInputEstimatedTokens: false,
   pasteLongTextAsFile: false,
   pasteLongTextThreshold: 1500,
+  context: {
+    maxContextTokens: 8000,
+    maxHistoryMessages: 20,
+    includeUrl: true,
+    includeTitle: true,
+    includeCapturedAt: false,
+  },
+  remote: {
+    s3: { ...DEFAULT_S3_CONFIG },
+    webdav: { ...DEFAULT_WEBDAV_CONFIG },
+  },
+  remoteType: 'none' as const,
+  webdavAutoSync: false,
+  webdavAutoSyncInterval: 30,
   renderInputMessageAsMarkdown: false,
   mathEngine: 'katex',
   targetLanguage: 'zh-CN',
@@ -291,6 +306,9 @@ function mapSettings(source: Record<string, unknown> | undefined): Settings {
     renderInputMessageAsMarkdown: pickBoolean('renderInputMessageAsMarkdown', DEFAULT_SETTINGS.renderInputMessageAsMarkdown),
     mathEngine: raw.mathEngine === 'mathjax' ? 'mathjax' : 'katex',
     targetLanguage: pickString('targetLanguage', DEFAULT_SETTINGS.targetLanguage),
+    remoteType: 'none',
+    webdavAutoSync: false,
+    webdavAutoSyncInterval: 30,
   }
 }
 

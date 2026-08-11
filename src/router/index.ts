@@ -8,6 +8,18 @@ const router = createRouter({
       name: 'Chat',
       component: () => import('@/views/chat/ChatPage.vue'),
     },
+    {
+      path: '/search',
+      name: 'Search',
+      component: () => import('@/views/chat/ChatPage.vue'),
+      meta: { defaultView: 'search' },
+    },
+    {
+      path: '/settings',
+      name: 'Settings',
+      component: () => import('@/views/chat/ChatPage.vue'),
+      meta: { defaultView: 'settings' },
+    },
   ],
 })
 

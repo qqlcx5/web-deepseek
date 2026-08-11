@@ -1,30 +1,41 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type { ChatMessage, Model } from '@/types'
+import type { AIProvider, ChatInput, StreamCallbacks } from '@/services/ai/types'
 
-// Replace the chat API module so chat-service never touches real network/http.
-vi.mock('@/api/chat-api', () => ({
-  ApiError: class ApiError extends Error {
-    status = 0
-    constructor(message: string, status: number) {
-      super(message)
-      this.name = 'ApiError'
-      this.status = status
-    }
-  },
-  chatApi: { chatStream: vi.fn() },
+// Replace the factory so chat-service never touches real network/http.
+const mockProvider: AIProvider = {
+  chat: vi.fn(),
+  streamChat: vi.fn(),
+  testConnection: vi.fn(),
+}
+
+vi.mock('@/services/ai/factory', () => ({
+  createProvider: vi.fn(() => mockProvider),
 }))
 
-import { chatApi } from '@/api/chat-api'
 import { streamAssistantMessage, type StreamDeps } from '@/services/chat-service'
 
-function sseStream(frames: string[]): ReadableStream<Uint8Array> {
-  const encoder = new TextEncoder()
-  return new ReadableStream<Uint8Array>({
-    start(controller) {
-      for (const frame of frames) controller.enqueue(encoder.encode(`data: ${frame}\n`))
-      controller.close()
-    },
-  })
+/**
+ * Helper to simulate a streamChat that delivers tokens via callbacks.
+ */
+function simulateStream(events: { token: string; type?: 'text' | 'thinking' }[]) {
+  return async (_input: ChatInput, callbacks: StreamCallbacks) => {
+    for (const evt of events) {
+      callbacks.onToken(evt.token, evt.type)
+      // Let throttling tick
+      await new Promise(r => setTimeout(r, 0))
+    }
+    callbacks.onDone()
+  }
+}
+
+/**
+ * Simulate streamChat that throws an error.
+ */
+function simulateError(error: Error) {
+  return async (_input: ChatInput, callbacks: StreamCallbacks) => {
+    callbacks.onError(error)
+  }
 }
 
 function makeMessage(): ChatMessage {
@@ -49,10 +60,6 @@ const MODEL: Model = {
   tags: [],
 }
 
-/**
- * Build StreamDeps with a real message object and an onDelta that applies
- * mutations directly to it — simulating what the store does on the proxy.
- */
 function makeDeps(message: ChatMessage, overrides: Partial<StreamDeps> = {}): StreamDeps {
   return {
     context: [],
@@ -68,14 +75,18 @@ function makeDeps(message: ChatMessage, overrides: Partial<StreamDeps> = {}): St
 }
 
 describe('streamAssistantMessage', () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.mocked(mockProvider.streamChat).mockReset()
+    vi.mocked(mockProvider.chat).mockReset()
+  })
 
   it('accumulates content + reasoning and finishes as complete', async () => {
     const message = makeMessage()
-    vi.mocked(chatApi.chatStream).mockResolvedValue(sseStream([
-      JSON.stringify({ reasoning_content: 'think' }),
-      JSON.stringify({ content: 'Hello' }),
-      JSON.stringify({ content: ' world' }),
+    mockProvider.streamChat.mockImplementation(simulateStream([
+      { token: 'think', type: 'thinking' },
+      { token: 'Hello', type: 'text' },
+      { token: ' world', type: 'text' },
     ]))
 
     await streamAssistantMessage(makeDeps(message))
@@ -88,33 +99,33 @@ describe('streamAssistantMessage', () => {
     expect(message.blocks.find(b => b.type === 'thinking')?.content).toBe('think')
   })
 
-  it('ignores the [DONE] sentinel and still completes', async () => {
+  it('finishes complete even with empty stream', async () => {
     const message = makeMessage()
-    vi.mocked(chatApi.chatStream).mockResolvedValue(sseStream([
-      '[DONE]',
-      JSON.stringify({ content: 'x' }),
-    ]))
+    mockProvider.streamChat.mockImplementation(async (_input, callbacks) => {
+      callbacks.onDone()
+    })
 
     await streamAssistantMessage(makeDeps(message))
 
-    expect(message.content).toBe('x')
     expect(message.status).toBe('complete')
+    expect(message.loading).toBe(false)
   })
 
   it('marks the message as stopped on abort', async () => {
     const message = makeMessage()
-    const abortError = new Error('aborted')
-    abortError.name = 'AbortError'
-    vi.mocked(chatApi.chatStream).mockRejectedValue(abortError)
+    mockProvider.streamChat.mockRejectedValue(
+      Object.assign(new Error('aborted'), { name: 'AbortError' }),
+    )
 
     await streamAssistantMessage(makeDeps(message))
 
     expect(message.status).toBe('stopped')
+    expect(message.loading).toBe(false)
   })
 
   it('marks the message as error and toasts on a non-abort failure', async () => {
     const message = makeMessage()
-    vi.mocked(chatApi.chatStream).mockRejectedValue(new Error('boom'))
+    mockProvider.streamChat.mockImplementation(simulateError(new Error('boom')))
 
     const deps = makeDeps(message)
     await streamAssistantMessage(deps)
@@ -126,16 +137,28 @@ describe('streamAssistantMessage', () => {
     expect(deps.onErrorToast).toHaveBeenCalledWith(expect.stringContaining('请求出错'))
   })
 
+  it('captures error message and preserves it in error block', async () => {
+    const message = makeMessage()
+    mockProvider.streamChat.mockImplementation(simulateError(new Error('Unauthorized')))
+
+    const deps = makeDeps(message)
+    await streamAssistantMessage(deps)
+
+    expect(message.status).toBe('error')
+    expect(message.error).toBe('Unauthorized')
+    expect(message.blocks.some(b => b.type === 'error')).toBe(true)
+    expect(deps.onErrorToast).toHaveBeenCalledWith(expect.stringContaining('Unauthorized'))
+  })
+
   it('throttles onPersist during the stream but always persists once at the end', async () => {
     const message = makeMessage()
-    vi.mocked(chatApi.chatStream).mockResolvedValue(
-      sseStream(Array.from({ length: 50 }, () => JSON.stringify({ content: 'x' }))),
+    mockProvider.streamChat.mockImplementation(
+      simulateStream(Array.from({ length: 50 }, () => ({ token: 'x', type: 'text' as const }))),
     )
     const deps = makeDeps(message)
 
     await streamAssistantMessage(deps)
 
-    // 50 frames arrive within the same tick → at most one mid-stream persist, plus the final one.
     expect(deps.onPersist).toHaveBeenCalledWith('t1', message)
     expect(deps.onPersist.mock.calls.length).toBeLessThan(50)
   })

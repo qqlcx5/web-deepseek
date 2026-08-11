@@ -53,7 +53,7 @@ export const useChatStore = defineStore('chat', () => {
       updatedAt: topic.updatedAt,
       messageCount: topic.messages.length,
     })))
-  const canSend = computed(() => Boolean(draft.value.trim() || attachments.value.length) && !generating.value)
+  const canSend = computed(() => (Boolean(draft.value.trim() || attachments.value.length)) && !generating.value && uiStore.selectedModelReady)
 
   const saving = computed(() => appStore.saving || generating.value)
 
@@ -153,12 +153,22 @@ export const useChatStore = defineStore('chat', () => {
     try {
       const model = getActiveModel()
       const provider = appStore.providers.find(candidate => candidate.id === model.providerId)
+      const assistant = currentChat.value
+        ? appStore.assistants.find(a => a.id === currentChat.value!.assistantId)
+        : appStore.defaultAssistant
+      const systemPrompt = assistant?.prompt || undefined
+      const maxContextTokens = appStore.settings.context.maxContextTokens
+      const maxHistoryMessages = appStore.settings.context.maxHistoryMessages
+
       await streamAssistantMessage({
         context,
         model,
         provider,
         signal: abortController.value.signal,
         topicId: activeChatId.value ?? undefined,
+        systemPrompt,
+        maxContextTokens,
+        maxHistoryMessages,
         onDelta: (mutator) => { mutator(proxyMessage) },
         onPersist: (topicId, message) => appStore.updateMessage(topicId, message),
         onErrorToast: message => uiStore.showToast(message),
@@ -172,7 +182,21 @@ export const useChatStore = defineStore('chat', () => {
   }
 
   async function sendMessage() {
-    if (!canSend.value) return
+    if (!canSend.value) {
+      if (!uiStore.selectedModelReady && (draft.value.trim() || attachments.value.length)) {
+        if (!uiStore.selectedModel) {
+          uiStore.showToast('请先在顶部选择模型')
+        } else {
+          const provider = appStore.providers.find(p => p.id === uiStore.selectedModel!.providerId)
+          if (!provider || !provider.enabled) {
+            uiStore.showToast('当前模型所属 Provider 未启用')
+          } else if (!provider.apiKey) {
+            uiStore.showToast(`Provider "${provider.name}" 缺少 API Key，请在 Provider 配置中设置`)
+          }
+        }
+      }
+      return
+    }
     if (!activeChatId.value) newConversation()
     const topicId = activeChatId.value
     if (!topicId) return
@@ -295,14 +319,18 @@ export const useChatStore = defineStore('chat', () => {
     const max = 6
     const remaining = max - attachments.value.length
     for (const file of files.slice(0, remaining)) {
+      const fileSize = file.size
       attachments.value.push({
         id: createId('file'),
         name: file.name,
-        size: file.size < 1024 * 1024 ? `${Math.max(1, Math.round(file.size / 1024))} KB` : `${(file.size / 1024 / 1024).toFixed(1)} MB`,
+        size: fileSize < 1024 * 1024 ? `${Math.max(1, Math.round(fileSize / 1024))} KB` : `${(fileSize / 1024 / 1024).toFixed(1)} MB`,
         type: file.type,
+        fileSize,
       })
     }
-    uiStore.showToast(files.length > remaining ? `最多 ${max} 个附件，已忽略 ${files.length - remaining} 个` : `${files.length} 个文件已加入上下文`)
+    if (files.length > 0) {
+      uiStore.showToast(files.length > remaining ? `最多 ${max} 个附件，已忽略 ${files.length - remaining} 个` : `${Math.min(files.length, remaining)} 个文件已加入上下文`)
+    }
   }
 
   function removeAttachment(file: Attachment | undefined) {

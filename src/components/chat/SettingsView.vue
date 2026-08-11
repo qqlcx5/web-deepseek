@@ -57,7 +57,7 @@ function handleImport() {
   input.click()
 }
 
-const emit = defineEmits<{ 'switch-view': [view: 'chat' | 'search' | 'settings'] }>()
+defineEmits<{ 'switch-view': [view: 'chat' | 'search' | 'settings'] }>()
 </script>
 
 <template>
@@ -276,8 +276,8 @@ const emit = defineEmits<{ 'switch-view': [view: 'chat' | 'search' | 'settings']
                 </div>
                 <el-switch
                   :model-value="model.enabled"
-                  @change="(val) => {
-                    model.enabled = val
+                  @change="(val: string | number | boolean) => {
+                    model.enabled = Boolean(val)
                     appStore.updateProvider(provider.id, { models: provider.models })
                   }"
                 />

@@ -1,12 +1,13 @@
 <script setup lang="ts">
-import { ref, watch, nextTick, computed, h } from 'vue'
+import { ref, watch, nextTick, computed } from 'vue'
 import { useChatStore } from '@/stores/chat'
 import { useAppStore } from '@/stores/app'
 import { useUiStore } from '@/stores/ui'
 import { Icon } from '@iconify/vue'
 import { MarkdownRenderer } from 'x-markdown-vue'
-import { Thinking, BubbleList } from 'vue-element-plus-x'
-import type { PromptsItemsProps } from 'vue-element-plus-x/types/components/Prompts/types'
+import { FilesCard, Thinking, BubbleList } from 'vue-element-plus-x'
+import type { PromptsItemsProps } from 'vue-element-plus-x/types/Prompts'
+import { WELCOME_PROMPTS } from '@/config/welcome-prompts'
 import { useTheme } from '@/composables/useTheme'
 import WelcomeScreen from './WelcomeScreen.vue'
 import 'x-markdown-vue/style'
@@ -16,7 +17,7 @@ const store = useChatStore()
 const appStore = useAppStore()
 const uiStore = useUiStore()
 const { isDark } = useTheme()
-const bubbleListRef = ref<InstanceType<typeof BubbleList> | null>(null)
+const bubbleListRef = ref<{ scrollToBottom: (smooth?: boolean) => void } | null>(null)
 const codeViewer = ref<{ language: string; code: string } | null>(null)
 
 const mermaidConfig = {
@@ -70,6 +71,7 @@ const isPlainMode = computed(() => appStore.settings?.messageStyle === 'plain')
 const showMessageDivider = computed(() => appStore.settings?.showMessageDivider ?? false)
 const codeShowLineNumbers = computed(() => appStore.settings?.codeShowLineNumbers ?? false)
 const codeWrappable = computed(() => appStore.settings?.codeWrappable ?? false)
+const autoScroll = computed(() => appStore.settings?.autoScroll ?? true)
 
 // Dynamic CSS class for message styling
 const messageClass = computed(() => ({
@@ -117,32 +119,7 @@ const welcomeDescription = computed(() => {
 })
 
 // ─── Preset prompts for empty state ───
-const promptItems = computed<PromptsItemsProps[]>(() => [
-  {
-    key: 'code',
-    label: '写一段代码',
-    description: '让 AI 帮你编写 Python、JavaScript、Go 等语言的脚本',
-    icon: h(Icon, { icon: 'tabler:code' }),
-  },
-  {
-    key: 'explain',
-    label: '解释概念',
-    description: '深入浅出地解释技术名词或复杂概念',
-    icon: h(Icon, { icon: 'tabler:bulb' }),
-  },
-  {
-    key: 'summarize',
-    label: '总结内容',
-    description: '将长文本浓缩为要点摘要',
-    icon: h(Icon, { icon: 'tabler:notes' }),
-  },
-  {
-    key: 'translate',
-    label: '翻译文字',
-    description: '在中文、英文、日文等多种语言间互译',
-    icon: h(Icon, { icon: 'tabler:language' }),
-  },
-])
+const promptItems = WELCOME_PROMPTS
 
 function handlePromptClick(item: PromptsItemsProps) {
   if (!item.label) return
@@ -193,7 +170,7 @@ function onScrollStateChange(state: 'AT_BOTTOM' | 'SCROLLED_UP' | 'HAS_NEW_MESSA
 watch(
   () => store.messages.length,
   () => {
-    if (uiStore.nearBottom || store.generating) {
+    if (autoScroll.value && (uiStore.nearBottom || store.generating)) {
       nextTick(() => scrollToBottom())
     }
   },
@@ -203,7 +180,7 @@ watch(
 watch(
   () => store.messages.map(m => m.content).join(''),
   () => {
-    if (uiStore.nearBottom) nextTick(() => scrollToBottom())
+    if (autoScroll.value && uiStore.nearBottom) nextTick(() => scrollToBottom())
   },
 )
 
@@ -211,7 +188,7 @@ watch(
 watch(
   () => store.messages.map(m => m.reasoningContent ?? '').join(''),
   () => {
-    if (uiStore.nearBottom) nextTick(() => scrollToBottom())
+    if (autoScroll.value && uiStore.nearBottom) nextTick(() => scrollToBottom())
   },
 )
 
@@ -237,7 +214,7 @@ defineExpose({ scrollToBottom })
       v-else
       ref="bubbleListRef"
       :list="bubbleItems"
-      :auto-scroll="true"
+      :auto-scroll="autoScroll"
       :virtual="false"
       item-key="key"
       :show-back-button="true"
@@ -387,6 +364,18 @@ defineExpose({ scrollToBottom })
         <!-- User content -->
         <template v-else>
           <div class="user-bubble">{{ item.message.content }}</div>
+          <div v-if="item.message.attachments?.length" class="user-attachments">
+            <FilesCard
+              v-for="att in item.message.attachments"
+              :key="att.id"
+              :uid="att.id"
+              :name="att.name"
+              :file-size="att.fileSize"
+              :url="att.url"
+              :img-preview="true"
+              :img-preview-mask="true"
+            />
+          </div>
         </template>
       </template>
 
@@ -406,12 +395,13 @@ defineExpose({ scrollToBottom })
 
           <!-- Message tools -->
           <div v-if="!item.message.loading" class="message-tools">
-            <button class="message-tool tooltip" data-tip="复制" @click="store.copyMessage(item.message)">
+            <button class="message-tool tooltip" data-tip="复制" aria-label="复制消息" @click="store.copyMessage(item.message)">
               <Icon icon="tabler:copy" />
             </button>
             <button
               class="message-tool tooltip"
               data-tip="有帮助"
+              aria-label="有帮助"
               :class="{ active: item.message.rating === 'up' }"
               @click="store.rateMessage(item.message, 'up')"
             >
@@ -420,15 +410,16 @@ defineExpose({ scrollToBottom })
             <button
               class="message-tool tooltip"
               data-tip="没有帮助"
+              aria-label="没有帮助"
               :class="{ active: item.message.rating === 'down' }"
               @click="store.rateMessage(item.message, 'down')"
             >
               <Icon icon="tabler:thumb-down" />
             </button>
-            <button class="message-tool tooltip" data-tip="重新生成" @click="store.regenerate(item.message)">
+            <button class="message-tool tooltip" data-tip="重新生成" aria-label="重新生成" @click="store.regenerate(item.message)">
               <Icon icon="tabler:rotate-clockwise" />
             </button>
-            <button class="message-tool tooltip" data-tip="从这里分支" @click="store.branchFrom(item.message)">
+            <button class="message-tool tooltip" data-tip="从这里分支" aria-label="从这里分支" @click="store.branchFrom(item.message)">
               <Icon icon="tabler:git-branch" />
             </button>
             <div v-if="(item.message.branches ?? 0) > 1" class="branch-switcher">
@@ -442,10 +433,10 @@ defineExpose({ scrollToBottom })
         <!-- User footer -->
         <template v-else>
           <div class="message-tools" style="justify-content:flex-end">
-            <button class="message-tool tooltip" data-tip="编辑并重新发送" @click="store.editMessage(item.message)">
+            <button class="message-tool tooltip" data-tip="编辑并重新发送" aria-label="编辑并重新发送" @click="store.editMessage(item.message)">
               <Icon icon="tabler:pencil" />
             </button>
-            <button class="message-tool tooltip" data-tip="复制" @click="store.copyMessage(item.message)">
+            <button class="message-tool tooltip" data-tip="复制" aria-label="复制消息" @click="store.copyMessage(item.message)">
               <Icon icon="tabler:copy" />
             </button>
           </div>
@@ -554,6 +545,17 @@ defineExpose({ scrollToBottom })
   font-size: 13px;
   line-height: 1.65;
   white-space: pre-wrap;
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
+/* User attachments */
+.user-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+  justify-content: flex-end;
 }
 
 /* ─── Typing indicator ─── */

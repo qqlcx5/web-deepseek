@@ -15,28 +15,28 @@
 
 ## 子任务
 
-- [ ] PromptBuilder 组装。
+- [x] PromptBuilder 组装。
   - 输入：systemPrompt、contextText、history messages、userInput。
   - 输出：`build({assistant, contextText, history, userInput}) → { systemPrompt?, messages[] }`；system 为空则不注入 system role。
   - 完成判定：与 ai-reader §10.3 规则一致；不出现硬编码身份文案。
 
-- [ ] 页面/文档上下文格式化。
+- [x] 页面/文档上下文格式化。
   - 输入：`DocumentEntity`（M23）或空。
   - 输出：`buildPageContext(doc, settings)` 生成 `<page_context>` 或 Markdown 块；按 `includeUrl/Title/CapturedAt` 开关。
   - 完成判定：开关生效；无 document 时返回空串。
 
-- [ ] token 估算截断。
+- [x] token 估算截断。
   - 输入：contextText、`model.contextLength`、`settings.context.maxContextTokens`、`maxHistoryMessages`。
   - 输出：`truncateContext(text, budget)` 按 ~4 字符/token 截断，优先保留头部元数据；历史按最近 N 条保留。
   - 完成判定：超长文档不溢出模型窗口；用户当前问题不参与截断。
 
-- [ ] chat-service 接入 builder。
+- [x] chat-service 接入 builder。
   - 输入：当前 Topic 历史、Assistant.prompt、（可选）当前 document。
   - 输出：请求 messages 由 builder 产出，替换现有 `context.filter(...).map(...)` 内联逻辑。
   - 完成判定：对话行为不回归；注入 document 后模型可见其内容。
 
 ## 验收
 
-- [ ] 无硬编码身份说明；systemPrompt 空时不发 system role。
-- [ ] 超长上下文被截断且不报 token 超限。
-- [ ] `npm run type-check` 通过。
+- [x] 无硬编码身份说明；systemPrompt 空时不发 system role。
+- [x] 超长上下文被截断且不报 token 超限。
+- [x] `npm run type-check` 通过。
