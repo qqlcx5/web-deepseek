@@ -90,15 +90,10 @@ function openTopic(topicId: string) {
 
 <style scoped lang="scss">
 .search-main {
-  margin-left: 344px;
   display: flex;
   flex-direction: column;
   height: 100vh;
   background: #f8fafc;
-
-  @media (max-width: 759px) {
-    margin-left: 0;
-  }
 }
 
 .search-header {

@@ -210,13 +210,10 @@ async function confirmClear() {
 
 <style scoped lang="scss">
 .settings-main {
-  margin-left: 344px;
   display: flex;
   flex-direction: column;
   height: 100vh;
   background: #f8fafc;
-
-  @media (max-width: 759px) { margin-left: 0; }
 }
 
 .settings-header {
